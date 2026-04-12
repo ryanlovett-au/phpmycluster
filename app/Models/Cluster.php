@@ -1,0 +1,55 @@
+<?php
+
+namespace App\Models;
+
+use App\Enums\ClusterStatus;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class Cluster extends Model
+{
+    protected $guarded = [];
+
+    protected $casts = [
+        'status' => ClusterStatus::class,
+        'last_status_json' => 'array',
+        'last_checked_at' => 'datetime',
+        'cluster_admin_password_encrypted' => 'encrypted',
+    ];
+
+    public function nodes(): HasMany
+    {
+        return $this->hasMany(Node::class);
+    }
+
+    public function dbNodes(): HasMany
+    {
+        return $this->hasMany(Node::class)->whereIn('role', ['primary', 'secondary', 'pending']);
+    }
+
+    public function accessNodes(): HasMany
+    {
+        return $this->hasMany(Node::class)->where('role', 'access');
+    }
+
+    public function auditLogs(): HasMany
+    {
+        return $this->hasMany(AuditLog::class);
+    }
+
+    public function primaryNode(): ?Node
+    {
+        return $this->nodes()->where('role', 'primary')->first();
+    }
+
+    /**
+     * Build the IP allowlist dynamically from all DB node IPs.
+     */
+    public function buildIpAllowlist(): string
+    {
+        return $this->dbNodes()
+            ->pluck('host')
+            ->unique()
+            ->implode(',');
+    }
+}
