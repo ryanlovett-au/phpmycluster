@@ -2,11 +2,12 @@
 
 namespace App\Livewire;
 
+use App\Jobs\SetupRouterJob;
 use App\Models\Cluster;
 use App\Models\Node;
-use App\Services\FirewallService;
 use App\Services\NodeProvisionService;
 use App\Services\SshService;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Component;
 
 class RouterManager extends Component
@@ -30,8 +31,23 @@ class RouterManager extends Component
 
     public ?array $routerKeyPair = null;
 
-    public string $routerAllowFrom = 'any'; // which IPs can connect to the router
+    public string $routerAllowFrom = 'any';
 
+    // Setup progress
+    public bool $settingUpRouter = false;
+
+    public bool $setupComplete = false;
+
+    public ?int $settingUpNodeId = null;
+
+    public array $setupSteps = [];
+
+    // Rename
+    public ?int $renamingNodeId = null;
+
+    public string $renameNodeValue = '';
+
+    // Action feedback
     public string $actionMessage = '';
 
     public string $actionStatus = '';
@@ -47,7 +63,7 @@ class RouterManager extends Component
     }
 
     /**
-     * Set up MySQL Router on a new access node.
+     * Set up MySQL Router on a new access node — dispatches a background job.
      */
     public function setupRouter()
     {
@@ -73,58 +89,105 @@ class RouterManager extends Component
                 'ssh_private_key_encrypted' => $privateKey,
                 'ssh_public_key' => $publicKey,
                 'role' => 'access',
+                'status' => 'unknown',
             ]);
 
-            $provisionService = app(NodeProvisionService::class);
-            $firewallService = app(FirewallService::class);
+            // Clear any previous progress
+            Cache::forget(SetupRouterJob::progressKey($node->id));
 
-            // Install MySQL Router
-            $this->setMessage('Installing MySQL Router...', 'info');
-            $installResult = $provisionService->installMysqlRouter($node);
-            if (! $installResult['installed']) {
-                throw new \RuntimeException('Failed to install MySQL Router.');
-            }
+            // Dispatch the job
+            SetupRouterJob::dispatch($this->cluster, $node, $this->routerAllowFrom);
 
-            // Configure firewall
-            $this->setMessage('Configuring firewall...', 'info');
-            $firewallService->configureAccessNode($node, $this->cluster, $this->routerAllowFrom);
-
-            // Also update DB node firewalls to allow this router
-            foreach ($this->cluster->dbNodes as $dbNode) {
-                app(SshService::class)->exec(
-                    $dbNode,
-                    "ufw allow from {$node->host} to any port {$dbNode->mysql_port} proto tcp comment 'MySQL from router {$node->name}'",
-                    'firewall.rule',
-                    sudo: true
-                );
-            }
-
-            // Bootstrap the router
-            $primary = $this->cluster->primaryNode();
-            if (! $primary) {
-                throw new \RuntimeException('No primary node found to bootstrap router against.');
-            }
-
-            $this->setMessage('Bootstrapping MySQL Router...', 'info');
-            $bootstrapResult = $provisionService->bootstrapRouter(
-                $node,
-                $primary,
-                $this->cluster->cluster_admin_password_encrypted
-            );
-
-            if ($bootstrapResult['success']) {
-                $node->update(['status' => 'online', 'mysql_router_installed' => true]);
-                $this->setMessage("Router {$node->name} set up and running.", 'success');
-            } else {
-                throw new \RuntimeException('Router bootstrap failed: '.$bootstrapResult['output']);
-            }
-
-            $this->resetForm();
-            $this->cluster->refresh();
+            $this->settingUpRouter = true;
+            $this->setupComplete = false;
+            $this->settingUpNodeId = $node->id;
+            $this->setupSteps = [
+                ['message' => "Starting router setup for {$node->name}...", 'status' => 'running', 'time' => now()->format('H:i:s')],
+            ];
+            $this->showAddRouter = false;
 
         } catch (\Throwable $e) {
-            $this->setMessage("Error: {$e->getMessage()}", 'error');
+            $this->setMessage("Error creating router node: {$e->getMessage()}", 'error');
         }
+    }
+
+    /**
+     * Poll the setup job progress from the cache.
+     */
+    public function pollSetup(): void
+    {
+        if (! $this->settingUpNodeId) {
+            return;
+        }
+
+        $progress = Cache::get(SetupRouterJob::progressKey($this->settingUpNodeId));
+
+        if (! $progress) {
+            return;
+        }
+
+        $this->setupSteps = $progress['steps'];
+
+        if ($progress['status'] === 'complete') {
+            $this->setupComplete = true;
+            $this->settingUpRouter = false;
+            $this->cluster->refresh();
+            $this->resetForm();
+        } elseif ($progress['status'] === 'failed') {
+            $this->settingUpRouter = false;
+        }
+    }
+
+    /**
+     * Retry setting up a failed router node.
+     */
+    public function retrySetup(int $nodeId): void
+    {
+        $node = Node::findOrFail($nodeId);
+
+        Cache::forget(SetupRouterJob::progressKey($node->id));
+        $node->update(['status' => 'unknown']);
+
+        SetupRouterJob::dispatch($this->cluster, $node, $this->routerAllowFrom);
+
+        $this->settingUpRouter = true;
+        $this->setupComplete = false;
+        $this->settingUpNodeId = $node->id;
+        $this->setupSteps = [
+            ['message' => "Retrying router setup for {$node->name}...", 'status' => 'running', 'time' => now()->format('H:i:s')],
+        ];
+    }
+
+    /**
+     * Dismiss the setup progress panel.
+     */
+    public function dismissSetupProgress(): void
+    {
+        $this->setupSteps = [];
+        $this->setupComplete = false;
+        $this->settingUpNodeId = null;
+        $this->cluster->refresh();
+    }
+
+    /**
+     * Delete a failed/pending router node.
+     */
+    public function deleteRouter(int $nodeId): void
+    {
+        $node = Node::findOrFail($nodeId);
+
+        if ($node->status->value === 'online') {
+            $this->setMessage('Cannot delete a running router. Stop it first.', 'error');
+
+            return;
+        }
+
+        Cache::forget(SetupRouterJob::progressKey($node->id));
+        $name = $node->name;
+        $node->delete();
+
+        $this->setMessage("Router {$name} deleted.", 'success');
+        $this->cluster->refresh();
     }
 
     /**
@@ -145,6 +208,46 @@ class RouterManager extends Component
             $result['running'] ? "Router on {$node->name} is running." : "Router on {$node->name} is not running.",
             $result['running'] ? 'success' : 'error'
         );
+    }
+
+    /**
+     * Start renaming a router node.
+     */
+    public function startRename(int $nodeId): void
+    {
+        $node = Node::findOrFail($nodeId);
+        $this->renamingNodeId = $nodeId;
+        $this->renameNodeValue = $node->name;
+    }
+
+    /**
+     * Save the new router node name.
+     */
+    public function saveRename(): void
+    {
+        if (! $this->renamingNodeId) {
+            return;
+        }
+
+        $this->validate([
+            'renameNodeValue' => 'required|string|max:255',
+        ]);
+
+        $node = Node::findOrFail($this->renamingNodeId);
+        $node->update(['name' => $this->renameNodeValue]);
+
+        $this->renamingNodeId = null;
+        $this->renameNodeValue = '';
+        $this->cluster->refresh();
+    }
+
+    /**
+     * Cancel renaming.
+     */
+    public function cancelRename(): void
+    {
+        $this->renamingNodeId = null;
+        $this->renameNodeValue = '';
     }
 
     protected function setMessage(string $message, string $status): void
@@ -168,6 +271,6 @@ class RouterManager extends Component
     {
         return view('livewire.router-manager', [
             'routerNodes' => $this->cluster->accessNodes()->get(),
-        ]);
+        ])->layout('layouts.app', ['title' => __('MySQL Router').' - '.$this->cluster->name]);
     }
 }

@@ -104,7 +104,7 @@ class FirewallService
      * Configure UFW rules for an access (router) node.
      * Opens MySQL Router ports for application traffic.
      */
-    public function configureAccessNode(Node $node, Cluster $cluster, string $allowFrom = 'any'): array
+    public function configureAccessNode(Node $node, Cluster $cluster, string $allowFrom = '127.0.0.1'): array
     {
         $results = [];
 

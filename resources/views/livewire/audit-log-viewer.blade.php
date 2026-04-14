@@ -1,4 +1,3 @@
-<x-layouts::app :title="__('Audit Log')">
     <div class="flex flex-col gap-6">
         <flux:heading size="xl">{{ __('Audit Log') }}</flux:heading>
 
@@ -64,4 +63,3 @@
 
         <div>{{ $logs->links() }}</div>
     </div>
-</x-layouts::app>

@@ -22,6 +22,7 @@ class Node extends Model
         'mysql_router_installed' => 'boolean',
         'mysql_configured' => 'boolean',
         'ssh_private_key_encrypted' => 'encrypted',
+        'mysql_root_password_encrypted' => 'encrypted',
     ];
 
     public function cluster(): BelongsTo

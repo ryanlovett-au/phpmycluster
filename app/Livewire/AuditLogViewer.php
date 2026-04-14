@@ -40,6 +40,6 @@ class AuditLogViewer extends Component
 
         return view('livewire.audit-log-viewer', [
             'logs' => $query->paginate(25),
-        ]);
+        ])->layout('layouts.app', ['title' => __('Audit Log')]);
     }
 }

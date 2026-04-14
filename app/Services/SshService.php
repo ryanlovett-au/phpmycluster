@@ -67,7 +67,7 @@ class SshService
      * Execute a command on a node and return the output.
      * Logs everything to audit_logs.
      */
-    public function exec(Node $node, string $command, string $action = 'ssh.exec', bool $sudo = false): array
+    public function exec(Node $node, string $command, string $action = 'ssh.exec', bool $sudo = false, int $timeout = 300): array
     {
         $start = microtime(true);
 
@@ -81,6 +81,7 @@ class SshService
 
         try {
             $ssh = $this->connect($node);
+            $ssh->setTimeout($timeout);
 
             $fullCommand = $sudo ? 'sudo bash -c '.escapeshellarg($command) : $command;
             $output = $ssh->exec($fullCommand);
@@ -129,6 +130,39 @@ class SshService
     {
         try {
             $ssh = $this->connect($node);
+            $hostname = trim($ssh->exec('hostname'));
+            $os = trim($ssh->exec('cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d \'"\''));
+
+            return [
+                'success' => true,
+                'hostname' => $hostname,
+                'os' => $os,
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Test SSH connectivity using raw credentials (no Node model needed).
+     * Useful during setup wizard before the node is persisted.
+     */
+    public function testConnectionDirect(string $host, int $port, string $user, string $privateKeyContent): array
+    {
+        try {
+            $ssh = new SSH2($host, $port, 10);
+            $key = PublicKeyLoader::loadPrivateKey($privateKeyContent);
+
+            if (! $ssh->login($user, $key)) {
+                return [
+                    'success' => false,
+                    'error' => "Authentication failed for {$user}@{$host}:{$port}",
+                ];
+            }
+
             $hostname = trim($ssh->exec('hostname'));
             $os = trim($ssh->exec('cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d \'"\''));
 

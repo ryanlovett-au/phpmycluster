@@ -24,10 +24,22 @@ class CreateNewUser implements CreatesNewUsers
             'password' => $this->passwordRules(),
         ])->validate();
 
-        return User::create([
+        $isFirstUser = User::count() === 0;
+
+        $user = User::create([
             'name' => $input['name'],
             'email' => $input['email'],
             'password' => $input['password'],
         ]);
+
+        // First user is auto-approved and made admin
+        if ($isFirstUser) {
+            $user->update([
+                'approved_at' => now(),
+                'is_admin' => true,
+            ]);
+        }
+
+        return $user;
     }
 }

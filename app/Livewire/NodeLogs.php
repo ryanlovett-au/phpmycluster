@@ -52,6 +52,6 @@ class NodeLogs extends Component
     public function render()
     {
         return view('livewire.node-logs')
-            ->layout('layouts.app');
+            ->layout('layouts.app', ['title' => $this->node->name.' - '.__('Logs')]);
     }
 }

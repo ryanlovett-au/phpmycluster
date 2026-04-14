@@ -2,12 +2,12 @@
 
 namespace App\Livewire;
 
+use App\Jobs\ProvisionClusterJob;
 use App\Models\Cluster;
 use App\Models\Node;
-use App\Services\FirewallService;
-use App\Services\MysqlShellService;
-use App\Services\NodeProvisionService;
 use App\Services\SshService;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Validate;
 use Livewire\Component;
 
@@ -60,16 +60,84 @@ class ClusterSetupWizard extends Component
     #[Validate('required|string')]
     public string $mysqlRootPassword = '';
 
+    // Re-provisioning mode
+    public bool $isReprovision = false;
+
+    public bool $sshKeyMissing = false;
+
+    public bool $sshKeyAuthFailed = false;
+
     // Results
     public ?int $clusterId = null;
 
     public ?array $clusterStatus = null;
 
+    public function mount(?Cluster $cluster = null): void
+    {
+        if ($cluster && $cluster->exists) {
+            $this->isReprovision = true;
+            $this->clusterId = $cluster->id;
+            $this->clusterName = $cluster->name;
+            $this->communicationStack = $cluster->communication_stack;
+            $this->clusterAdminUser = $cluster->cluster_admin_user;
+            $this->clusterAdminPassword = $cluster->cluster_admin_password_encrypted;
+
+            $node = $cluster->nodes()->first();
+            if ($node) {
+                $this->seedName = $node->name;
+                $this->seedHost = $node->host;
+                $this->seedSshPort = $node->ssh_port;
+                $this->seedSshUser = $node->ssh_user;
+                $this->seedMysqlPort = $node->mysql_port;
+                $this->mysqlRootPassword = $node->mysql_root_password_encrypted ?? '';
+
+                // Test if existing SSH key still works
+                if (empty($node->ssh_private_key_encrypted)) {
+                    // Key not stored in the database
+                    $this->sshKeyMissing = true;
+                    $this->sshKeyMode = 'generate';
+                } else {
+                    $sshService = app(SshService::class);
+                    try {
+                        $result = $sshService->testConnection($node);
+                        if ($result['success']) {
+                            // Key works — skip straight to provision
+                            $this->sshKeyMode = 'existing';
+                            $this->step = 4;
+
+                            return;
+                        }
+                        Log::warning('SSH key test failed during re-provision mount', [
+                            'node_id' => $node->id,
+                            'result' => $result,
+                        ]);
+                    } catch (\Throwable $e) {
+                        Log::warning('SSH key test exception during re-provision mount', [
+                            'node_id' => $node->id,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+
+                    // Key exists in DB but auth failed on the server
+                    $this->sshKeyAuthFailed = true;
+                    $this->sshKeyMode = 'generate';
+                }
+            }
+
+            // SSH key needs setup — start at step 3
+            $this->step = 3;
+        }
+    }
+
     public function nextStep()
     {
         if ($this->step === 1) {
+            $uniqueRule = $this->isReprovision
+                ? "required|string|max:255|unique:clusters,name,{$this->clusterId}"
+                : 'required|string|max:255|unique:clusters,name';
+
             $this->validate([
-                'clusterName' => 'required|string|max:255|unique:clusters,name',
+                'clusterName' => $uniqueRule,
                 'clusterAdminPassword' => 'required|string|min:12',
             ]);
         }
@@ -102,55 +170,105 @@ class ClusterSetupWizard extends Component
      */
     public function testSshConnection()
     {
-        $this->addProvisionStep('Testing SSH connection...');
+        $this->provisionSteps = [];
+        $this->parseHostField();
+        $this->addProvisionStep("Testing SSH connection to {$this->seedSshUser}@{$this->seedHost}:{$this->seedSshPort}...");
 
         $privateKey = $this->sshKeyMode === 'generate'
             ? $this->generatedKeyPair['private']
             : $this->existingPrivateKey;
 
-        // Create a temporary node for testing
-        $node = new Node([
-            'host' => $this->seedHost,
-            'ssh_port' => $this->seedSshPort,
-            'ssh_user' => $this->seedSshUser,
-            'ssh_private_key_encrypted' => $privateKey,
-        ]);
+        try {
+            $sshService = app(SshService::class);
+            $result = $sshService->testConnectionDirect(
+                $this->seedHost,
+                $this->seedSshPort,
+                $this->seedSshUser,
+                $privateKey,
+            );
 
-        $sshService = app(SshService::class);
-        $result = $sshService->testConnection($node);
+            if ($result['success']) {
+                $this->updateLastProvisionStep("Connected! Hostname: {$result['hostname']}, OS: {$result['os']}", 'success');
+            } else {
+                $this->updateLastProvisionStep("Connection failed: {$result['error']}", 'error');
+            }
 
-        if ($result['success']) {
-            $this->addProvisionStep("Connected! Hostname: {$result['hostname']}, OS: {$result['os']}", 'success');
-        } else {
-            $this->addProvisionStep("Connection failed: {$result['error']}", 'error');
+            return $result;
+        } catch (\Throwable $e) {
+            $this->updateLastProvisionStep("Connection failed: {$e->getMessage()}", 'error');
+
+            return ['success' => false, 'error' => $e->getMessage()];
         }
-
-        return $result;
     }
 
     /**
-     * Run the full provisioning process.
+     * Parse user@host format from the host field if provided.
+     */
+    protected function parseHostField(): void
+    {
+        if (str_contains($this->seedHost, '@')) {
+            [$user, $host] = explode('@', $this->seedHost, 2);
+            $this->seedSshUser = $user;
+            $this->seedHost = $host;
+        }
+    }
+
+    /**
+     * Dispatch the provisioning job to the queue.
      */
     public function provision()
     {
-        $this->validate([
-            'mysqlRootPassword' => 'required|string',
-        ]);
+        if (! $this->isReprovision) {
+            $this->validate([
+                'mysqlRootPassword' => 'required|string',
+            ]);
+        }
 
         $this->provisioning = true;
         $this->provisionSteps = [];
 
         $privateKey = $this->sshKeyMode === 'generate'
-            ? $this->generatedKeyPair['private']
-            : $this->existingPrivateKey;
+            ? ($this->generatedKeyPair['private'] ?? null)
+            : ($this->existingPrivateKey ?: null);
 
         $publicKey = $this->sshKeyMode === 'generate'
-            ? $this->generatedKeyPair['public']
+            ? ($this->generatedKeyPair['public'] ?? '')
             : '';
 
-        try {
-            // 1. Create the cluster record
-            $this->addProvisionStep('Creating cluster record...');
+        if ($this->isReprovision && $this->clusterId) {
+            // Re-provisioning: update existing records
+            $cluster = Cluster::findOrFail($this->clusterId);
+            $cluster->update(['status' => 'pending']);
+
+            $node = $cluster->nodes()->first();
+
+            // Use the stored root password if not provided
+            if (empty($this->mysqlRootPassword)) {
+                $this->mysqlRootPassword = $node->mysql_root_password_encrypted ?? '';
+            }
+
+            $updateData = [
+                'host' => $this->seedHost,
+                'ssh_port' => $this->seedSshPort,
+                'ssh_user' => $this->seedSshUser,
+                'role' => 'pending',
+                'status' => 'unknown',
+            ];
+
+            // Only overwrite SSH key if a new one was actually provided
+            if (! empty($privateKey)) {
+                $updateData['ssh_private_key_encrypted'] = $privateKey;
+                $updateData['ssh_public_key'] = $publicKey;
+            }
+
+            // Only overwrite root password if a new one was entered
+            if (! empty($this->mysqlRootPassword)) {
+                $updateData['mysql_root_password_encrypted'] = $this->mysqlRootPassword;
+            }
+
+            $node->update($updateData);
+        } else {
+            // New cluster: create records
             $cluster = Cluster::create([
                 'name' => $this->clusterName,
                 'communication_stack' => $this->communicationStack,
@@ -160,8 +278,6 @@ class ClusterSetupWizard extends Component
             ]);
             $this->clusterId = $cluster->id;
 
-            // 2. Create the seed node record
-            $this->addProvisionStep('Registering seed node...');
             $node = Node::create([
                 'cluster_id' => $cluster->id,
                 'name' => $this->seedName ?: "node-1-{$this->seedHost}",
@@ -171,91 +287,45 @@ class ClusterSetupWizard extends Component
                 'ssh_private_key_encrypted' => $privateKey,
                 'ssh_public_key' => $publicKey,
                 'mysql_port' => $this->seedMysqlPort,
+                'mysql_root_password_encrypted' => $this->mysqlRootPassword,
                 'role' => 'pending',
                 'server_id' => 1,
             ]);
+        }
 
-            $provisionService = app(NodeProvisionService::class);
-            $firewallService = app(FirewallService::class);
-            $mysqlShell = app(MysqlShellService::class);
+        // Initialise the progress cache
+        Cache::put(ProvisionClusterJob::progressKey($cluster->id), [
+            'steps' => [
+                ['message' => 'Provisioning job queued...', 'status' => 'running', 'time' => now()->format('H:i:s')],
+            ],
+            'status' => 'running',
+        ], now()->addHours(2));
 
-            // 3. Detect OS
-            $this->addProvisionStep('Detecting operating system...');
-            $os = $provisionService->detectOs($node);
-            $this->addProvisionStep('OS: '.($os['pretty_name'] ?? 'Unknown'), 'success');
+        // Dispatch to queue
+        ProvisionClusterJob::dispatch($cluster, $node, $this->mysqlRootPassword, $this->clusterAdminPassword);
+    }
 
-            // 4. Install MySQL
-            $this->addProvisionStep('Installing MySQL Server and MySQL Shell (this may take a few minutes)...');
-            $installResult = $provisionService->installMysql($node);
-            if ($installResult['mysql_installed']) {
-                $this->addProvisionStep("MySQL installed: {$installResult['mysql_version']}", 'success');
-            } else {
-                throw new \RuntimeException('MySQL installation failed. Check audit logs for details.');
-            }
+    /**
+     * Poll for provisioning progress from the queued job.
+     */
+    public function pollProgress(): void
+    {
+        if (! $this->clusterId) {
+            return;
+        }
 
-            // 5. Write MySQL config
-            $this->addProvisionStep('Writing InnoDB Cluster configuration...');
-            $configResult = $provisionService->writeMysqlConfig($node);
-            if (! $configResult['success']) {
-                throw new \RuntimeException('Failed to write MySQL configuration.');
-            }
-            $this->addProvisionStep('MySQL configuration written.', 'success');
+        $progress = Cache::get(ProvisionClusterJob::progressKey($this->clusterId));
 
-            // 6. Restart MySQL
-            $this->addProvisionStep('Restarting MySQL...');
-            $restartResult = $provisionService->restartMysql($node);
-            if (! $restartResult['success']) {
-                throw new \RuntimeException('Failed to restart MySQL.');
-            }
-            $this->addProvisionStep('MySQL restarted.', 'success');
+        if (! $progress) {
+            return;
+        }
 
-            // 7. Configure instance for InnoDB Cluster
-            $this->addProvisionStep('Configuring instance for InnoDB Cluster...');
-            $configureResult = $mysqlShell->configureInstance(
-                $node,
-                $this->mysqlRootPassword,
-                $this->clusterAdminUser,
-                $this->clusterAdminPassword,
-            );
-            if (! $configureResult['success'] || isset($configureResult['data']['error'])) {
-                throw new \RuntimeException('Failed to configure instance: '.($configureResult['data']['error'] ?? $configureResult['raw_output']));
-            }
-            $this->addProvisionStep('Instance configured.', 'success');
+        $this->provisionSteps = $progress['steps'];
 
-            // 8. Restart MySQL again after configuration
-            $this->addProvisionStep('Restarting MySQL after configuration...');
-            $provisionService->restartMysql($node);
-            sleep(3); // Give MySQL time to fully start
-            $this->addProvisionStep('MySQL restarted.', 'success');
-
-            // 9. Configure firewall
-            $this->addProvisionStep('Configuring UFW firewall...');
-            $firewallService->configureDbNode($node, $cluster);
-            $this->addProvisionStep('Firewall configured.', 'success');
-
-            // 10. Create the cluster
-            $this->addProvisionStep('Creating InnoDB Cluster...');
-            $createResult = $mysqlShell->createCluster($node, $cluster, $this->clusterAdminPassword);
-            if (! $createResult['success'] || isset($createResult['data']['error'])) {
-                throw new \RuntimeException('Failed to create cluster: '.($createResult['data']['error'] ?? $createResult['raw_output']));
-            }
-            $this->addProvisionStep('InnoDB Cluster created!', 'success');
-
-            // 11. Update records
-            $node->update(['role' => 'primary', 'status' => 'online']);
-            $cluster->update([
-                'status' => 'online',
-                'last_status_json' => $createResult['data'],
-                'ip_allowlist' => $cluster->buildIpAllowlist(),
-                'last_checked_at' => now(),
-            ]);
-
-            $this->clusterStatus = $createResult['data'];
+        if ($progress['status'] === 'complete') {
             $this->provisioningComplete = true;
-            $this->addProvisionStep('Cluster setup complete!', 'success');
-
-        } catch (\Throwable $e) {
-            $this->addProvisionStep("Error: {$e->getMessage()}", 'error');
+            $this->provisioning = false;
+        } elseif ($progress['status'] === 'failed') {
             $this->provisioning = false;
         }
     }
@@ -270,9 +340,19 @@ class ClusterSetupWizard extends Component
         $this->currentAction = $message;
     }
 
+    protected function updateLastProvisionStep(string $message, string $status): void
+    {
+        if (count($this->provisionSteps) > 0) {
+            $lastIndex = count($this->provisionSteps) - 1;
+            $this->provisionSteps[$lastIndex]['message'] = $message;
+            $this->provisionSteps[$lastIndex]['status'] = $status;
+        }
+        $this->currentAction = $message;
+    }
+
     public function render()
     {
         return view('livewire.cluster-setup-wizard')
-            ->layout('layouts.app');
+            ->layout('layouts.app', ['title' => __('Create Cluster')]);
     }
 }

@@ -43,6 +43,29 @@ class Cluster extends Model
     }
 
     /**
+     * Get a reachable DB node for status queries.
+     * Tries the primary first, then falls back to online secondaries.
+     */
+    public function reachableDbNode(): ?Node
+    {
+        // Try primary first
+        $primary = $this->primaryNode();
+        if ($primary) {
+            return $primary;
+        }
+
+        // Fall back to any online secondary
+        return $this->nodes()
+            ->where('role', 'secondary')
+            ->where('status', 'online')
+            ->first()
+            // Last resort: any DB node that isn't pending
+            ?? $this->nodes()
+                ->whereIn('role', ['primary', 'secondary'])
+                ->first();
+    }
+
+    /**
      * Build the IP allowlist dynamically from all DB node IPs.
      */
     public function buildIpAllowlist(): string

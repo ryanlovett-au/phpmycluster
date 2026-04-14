@@ -1,4 +1,3 @@
-<x-layouts::app :title="$node->name . ' - Logs'">
     <div class="flex flex-col gap-6">
         <div class="flex items-center justify-between">
             <div>
@@ -50,4 +49,3 @@
             @endif
         </div>
     </div>
-</x-layouts::app>

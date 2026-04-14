@@ -1,11 +1,24 @@
-<x-layouts::app :title="__('Dashboard')">
     <div class="flex flex-col gap-6">
         <div class="flex items-center justify-between">
             <flux:heading size="xl">{{ __('InnoDB Cluster Dashboard') }}</flux:heading>
-            <flux:button variant="primary" href="{{ route('cluster.create') }}" wire:navigate icon="plus">
-                {{ __('Create New Cluster') }}
-            </flux:button>
+            <div class="flex gap-2">
+                @if($clusters->isNotEmpty())
+                    <flux:button wire:click="refreshAll" wire:loading.attr="disabled" icon="arrow-path">
+                        <span wire:loading.remove wire:target="refreshAll">{{ __('Refresh All') }}</span>
+                        <span wire:loading wire:target="refreshAll">{{ __('Refreshing...') }}</span>
+                    </flux:button>
+                @endif
+                <flux:button variant="primary" href="{{ route('cluster.create') }}" wire:navigate icon="plus">
+                    {{ __('Create New Cluster') }}
+                </flux:button>
+            </div>
         </div>
+
+        @if($refreshMessage)
+            <flux:callout variant="success">
+                <flux:callout.text>{{ $refreshMessage }}</flux:callout.text>
+            </flux:callout>
+        @endif
 
         @if($clusters->isEmpty())
             <div class="flex flex-col items-center justify-center rounded-xl border border-neutral-200 p-16 dark:border-neutral-700">
@@ -63,9 +76,6 @@
                             <flux:button size="sm" href="{{ route('cluster.manage', $cluster) }}" wire:navigate class="flex-1">
                                 {{ __('Manage') }}
                             </flux:button>
-                            <flux:button size="sm" href="{{ route('cluster.routers', $cluster) }}" wire:navigate>
-                                {{ __('Routers') }}
-                            </flux:button>
                         </div>
                     </div>
                 @endforeach
@@ -110,4 +120,3 @@
             </div>
         @endif
     </div>
-</x-layouts::app>

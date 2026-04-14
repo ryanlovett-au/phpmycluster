@@ -10,6 +10,9 @@ use App\Models\Node;
  * All commands are executed via SSH on the target node — mysqlsh runs locally
  * on that node and connects to localhost, so no MySQL ports need to be open
  * from the control node.
+ *
+ * Uses JavaScript mode (--js) with MySQL Shell from the official MySQL APT
+ * repository, which includes full JavaScript support.
  */
 class MysqlShellService
 {
@@ -18,11 +21,10 @@ class MysqlShellService
     ) {}
 
     /**
-     * Run a mysqlsh JS command on a node and return parsed JSON output.
+     * Run a mysqlsh JavaScript command on a node and return parsed JSON output.
      */
     public function runJs(Node $node, string $jsCode, string $action, ?string $password = null): array
     {
-        // Wrap JS code to output JSON
         $escapedJs = str_replace("'", "'\\''", $jsCode);
 
         $passwordEnv = $password ? 'MYSQLSH_PASSWORD='.escapeshellarg($password).' ' : '';
@@ -50,13 +52,9 @@ class MysqlShellService
         $uri = "clusteradmin@localhost:{$node->mysql_port}";
 
         return $this->runJs($node, "
-            try {
-                var result = dba.checkInstanceConfiguration('{$uri}');
-                print(JSON.stringify(result));
-            } catch(e) {
-                print(JSON.stringify({error: e.message}));
-            }
-        ", 'cluster.check_instance', $password);
+var result = dba.checkInstanceConfiguration('{$uri}');
+print(JSON.stringify(result));
+", 'cluster.check_instance', $password);
     }
 
     /**
@@ -64,41 +62,71 @@ class MysqlShellService
      */
     public function configureInstance(Node $node, string $rootPassword, string $clusterAdminUser, string $clusterAdminPassword): array
     {
-        return $this->runJs($node, "
-            try {
-                dba.configureInstance('root@localhost:{$node->mysql_port}', {
-                    password: '{$rootPassword}',
-                    clusterAdmin: '{$clusterAdminUser}',
-                    clusterAdminPassword: '{$clusterAdminPassword}',
-                    interactive: false,
-                    restart: false
-                });
-                print(JSON.stringify({status: 'ok'}));
-            } catch(e) {
-                print(JSON.stringify({error: e.message}));
-            }
-        ", 'cluster.configure_instance');
+        // MySQL 8.4 uses auth_socket for root by default — root can only authenticate
+        // via Unix socket as the OS root user (no password needed).
+        // We pass the socket URI to configureInstance so it connects via auth_socket.
+        // If the SSH user is not root, we fall back to password-based TCP auth.
+        $socketUri = 'root@localhost?socket=%2Fvar%2Frun%2Fmysqld%2Fmysqld.sock';
+        $tcpUri = "root@localhost:{$node->mysql_port}";
+
+        $jsCode = "
+try {
+    dba.configureInstance('{$socketUri}', {
+        clusterAdmin: '{$clusterAdminUser}',
+        clusterAdminPassword: '{$clusterAdminPassword}',
+        restart: false
+    });
+    print(JSON.stringify({status: 'ok'}));
+} catch(e) {
+    print(JSON.stringify({error: e.message}));
+}
+";
+
+        // Try socket auth first (works when SSH user is root and MySQL uses auth_socket)
+        $result = $this->runJs($node, $jsCode, 'cluster.configure_instance');
+
+        // Only fall back to password auth if the error is specifically "Access denied"
+        // (not for other errors like hostname resolution issues)
+        if (isset($result['data']['error']) && str_contains($result['data']['error'], 'Access denied')) {
+            $jsCodeTcp = "
+try {
+    dba.configureInstance('{$tcpUri}', {
+        clusterAdmin: '{$clusterAdminUser}',
+        clusterAdminPassword: '{$clusterAdminPassword}',
+        restart: false
+    });
+    print(JSON.stringify({status: 'ok'}));
+} catch(e) {
+    print(JSON.stringify({error: e.message}));
+}
+";
+            $result = $this->runJs($node, $jsCodeTcp, 'cluster.configure_instance_tcp', $rootPassword);
+        }
+
+        return $result;
     }
 
     /**
-     * Create a new InnoDB Cluster on the seed (primary) node.
+     * Create a new InnoDB Cluster on the primary node.
      */
-    public function createCluster(Node $seedNode, Cluster $cluster, string $password): array
+    public function createCluster(Node $primaryNode, Cluster $cluster, string $password): array
     {
-        $ipAllowlist = $cluster->buildIpAllowlist();
+        // ipAllowlist is only valid with XCOM communication stack, not MYSQL
+        $options = "communicationStack: '{$cluster->communication_stack}'";
+        if (strtoupper($cluster->communication_stack) === 'XCOM') {
+            $ipAllowlist = $cluster->buildIpAllowlist();
+            $options .= ", ipAllowlist: '{$ipAllowlist}'";
+        }
 
-        return $this->runJs($seedNode, "
-            try {
-                shell.connect('clusteradmin@localhost:{$seedNode->mysql_port}', '{$password}');
-                var c = dba.createCluster('{$cluster->name}', {
-                    ipAllowlist: '{$ipAllowlist}',
-                    communicationStack: '{$cluster->communication_stack}'
-                });
-                print(JSON.stringify(c.status()));
-            } catch(e) {
-                print(JSON.stringify({error: e.message}));
-            }
-        ", 'cluster.create', $password);
+        return $this->runJs($primaryNode, "
+try {
+    shell.connect('clusteradmin@localhost:{$primaryNode->mysql_port}', '{$password}');
+    var c = dba.createCluster('{$cluster->name}', {{$options}});
+    print(JSON.stringify(c.status()));
+} catch(e) {
+    print(JSON.stringify({error: e.message}));
+}
+", 'cluster.create', $password);
     }
 
     /**
@@ -107,15 +135,15 @@ class MysqlShellService
     public function getClusterStatus(Node $node, string $password): array
     {
         return $this->runJs($node, "
-            try {
-                shell.connect('clusteradmin@localhost:{$node->mysql_port}', '{$password}');
-                var c = dba.getCluster();
-                var status = c.status({extended: 1});
-                print(JSON.stringify(status));
-            } catch(e) {
-                print(JSON.stringify({error: e.message}));
-            }
-        ", 'cluster.status', $password);
+try {
+    shell.connect('clusteradmin@localhost:{$node->mysql_port}', '{$password}');
+    var c = dba.getCluster();
+    var status = c.status({extended: 2});
+    print(JSON.stringify(status));
+} catch(e) {
+    print(JSON.stringify({error: e.message}));
+}
+", 'cluster.status', $password);
     }
 
     /**
@@ -123,22 +151,23 @@ class MysqlShellService
      */
     public function addInstance(Node $primaryNode, Node $newNode, Cluster $cluster, string $password): array
     {
-        $ipAllowlist = $cluster->buildIpAllowlist();
+        // ipAllowlist is only valid with XCOM communication stack, not MYSQL
+        $options = "recoveryMethod: 'clone'";
+        if (strtoupper($cluster->communication_stack) === 'XCOM') {
+            $ipAllowlist = $cluster->buildIpAllowlist();
+            $options .= ", ipAllowlist: '{$ipAllowlist}'";
+        }
 
         return $this->runJs($primaryNode, "
-            try {
-                shell.connect('clusteradmin@localhost:{$primaryNode->mysql_port}', '{$password}');
-                var c = dba.getCluster();
-                c.addInstance('clusteradmin@{$newNode->host}:{$newNode->mysql_port}', {
-                    password: '{$password}',
-                    recoveryMethod: 'clone',
-                    ipAllowlist: '{$ipAllowlist}'
-                });
-                print(JSON.stringify(c.status()));
-            } catch(e) {
-                print(JSON.stringify({error: e.message}));
-            }
-        ", 'cluster.add_instance', $password);
+try {
+    shell.connect('clusteradmin@localhost:{$primaryNode->mysql_port}', '{$password}');
+    var c = dba.getCluster();
+    c.addInstance('clusteradmin@{$newNode->host}:{$newNode->mysql_port}', {{$options}});
+    print(JSON.stringify(c.status()));
+} catch(e) {
+    print(JSON.stringify({error: e.message}));
+}
+", 'cluster.add_instance', $password);
     }
 
     /**
@@ -149,15 +178,15 @@ class MysqlShellService
         $forceOption = $force ? ', force: true' : '';
 
         return $this->runJs($primaryNode, "
-            try {
-                shell.connect('clusteradmin@localhost:{$primaryNode->mysql_port}', '{$password}');
-                var c = dba.getCluster();
-                c.removeInstance('clusteradmin@{$targetNode->host}:{$targetNode->mysql_port}'{$forceOption});
-                print(JSON.stringify({status: 'removed'}));
-            } catch(e) {
-                print(JSON.stringify({error: e.message}));
-            }
-        ", 'cluster.remove_instance', $password);
+try {
+    shell.connect('clusteradmin@localhost:{$primaryNode->mysql_port}', '{$password}');
+    var c = dba.getCluster();
+    c.removeInstance('clusteradmin@{$targetNode->host}:{$targetNode->mysql_port}'{$forceOption});
+    print(JSON.stringify({status: 'removed'}));
+} catch(e) {
+    print(JSON.stringify({error: e.message}));
+}
+", 'cluster.remove_instance', $password);
     }
 
     /**
@@ -166,15 +195,15 @@ class MysqlShellService
     public function rejoinInstance(Node $primaryNode, Node $targetNode, string $password): array
     {
         return $this->runJs($primaryNode, "
-            try {
-                shell.connect('clusteradmin@localhost:{$primaryNode->mysql_port}', '{$password}');
-                var c = dba.getCluster();
-                c.rejoinInstance('clusteradmin@{$targetNode->host}:{$targetNode->mysql_port}');
-                print(JSON.stringify(c.status()));
-            } catch(e) {
-                print(JSON.stringify({error: e.message}));
-            }
-        ", 'cluster.rejoin_instance', $password);
+try {
+    shell.connect('clusteradmin@localhost:{$primaryNode->mysql_port}', '{$password}');
+    var c = dba.getCluster();
+    c.rejoinInstance('clusteradmin@{$targetNode->host}:{$targetNode->mysql_port}');
+    print(JSON.stringify(c.status()));
+} catch(e) {
+    print(JSON.stringify({error: e.message}));
+}
+", 'cluster.rejoin_instance', $password);
     }
 
     /**
@@ -183,15 +212,15 @@ class MysqlShellService
     public function rescanCluster(Node $node, string $password): array
     {
         return $this->runJs($node, "
-            try {
-                shell.connect('clusteradmin@localhost:{$node->mysql_port}', '{$password}');
-                var c = dba.getCluster();
-                c.rescan({interactive: false});
-                print(JSON.stringify(c.status()));
-            } catch(e) {
-                print(JSON.stringify({error: e.message}));
-            }
-        ", 'cluster.rescan', $password);
+try {
+    shell.connect('clusteradmin@localhost:{$node->mysql_port}', '{$password}');
+    var c = dba.getCluster();
+    c.rescan({interactive: false});
+    print(JSON.stringify(c.status()));
+} catch(e) {
+    print(JSON.stringify({error: e.message}));
+}
+", 'cluster.rescan', $password);
     }
 
     /**
@@ -200,15 +229,15 @@ class MysqlShellService
     public function forceQuorum(Node $node, string $password): array
     {
         return $this->runJs($node, "
-            try {
-                shell.connect('clusteradmin@localhost:{$node->mysql_port}', '{$password}');
-                var c = dba.getCluster();
-                c.forceQuorumUsingPartitionOf('clusteradmin@localhost:{$node->mysql_port}');
-                print(JSON.stringify(c.status()));
-            } catch(e) {
-                print(JSON.stringify({error: e.message}));
-            }
-        ", 'cluster.force_quorum', $password);
+try {
+    shell.connect('clusteradmin@localhost:{$node->mysql_port}', '{$password}');
+    var c = dba.getCluster();
+    c.forceQuorumUsingPartitionOf('clusteradmin@localhost:{$node->mysql_port}');
+    print(JSON.stringify(c.status()));
+} catch(e) {
+    print(JSON.stringify({error: e.message}));
+}
+", 'cluster.force_quorum', $password);
     }
 
     /**
@@ -217,14 +246,14 @@ class MysqlShellService
     public function rebootCluster(Node $node, string $password): array
     {
         return $this->runJs($node, "
-            try {
-                shell.connect('clusteradmin@localhost:{$node->mysql_port}', '{$password}');
-                var c = dba.rebootClusterFromCompleteOutage();
-                print(JSON.stringify(c.status()));
-            } catch(e) {
-                print(JSON.stringify({error: e.message}));
-            }
-        ", 'cluster.reboot', $password);
+try {
+    shell.connect('clusteradmin@localhost:{$node->mysql_port}', '{$password}');
+    var c = dba.rebootClusterFromCompleteOutage();
+    print(JSON.stringify(c.status()));
+} catch(e) {
+    print(JSON.stringify({error: e.message}));
+}
+", 'cluster.reboot', $password);
     }
 
     /**
@@ -235,15 +264,202 @@ class MysqlShellService
         $arg = $newPrimaryHost ? "'clusteradmin@{$newPrimaryHost}'" : '';
 
         return $this->runJs($node, "
-            try {
-                shell.connect('clusteradmin@localhost:{$node->mysql_port}', '{$password}');
-                var c = dba.getCluster();
-                c.switchToSinglePrimaryMode({$arg});
-                print(JSON.stringify(c.status()));
-            } catch(e) {
-                print(JSON.stringify({error: e.message}));
+try {
+    shell.connect('clusteradmin@localhost:{$node->mysql_port}', '{$password}');
+    var c = dba.getCluster();
+    c.switchToSinglePrimaryMode({$arg});
+    print(JSON.stringify(c.status()));
+} catch(e) {
+    print(JSON.stringify({error: e.message}));
+}
+", 'cluster.switch_primary', $password);
+    }
+
+    /**
+     * List MySQL users (excluding system accounts).
+     * Connects as root via Unix socket (auth_socket) for full privileges.
+     */
+    public function listUsers(Node $node, string $password): array
+    {
+        $socketUri = 'root@localhost?socket=%2Fvar%2Frun%2Fmysqld%2Fmysqld.sock';
+
+        return $this->runJs($node, <<<'JSEOF'
+try {
+    shell.connect('root@localhost?socket=%2Fvar%2Frun%2Fmysqld%2Fmysqld.sock');
+    var result = session.runSql("SELECT User, Host, authentication_string != '' AS has_password FROM mysql.user WHERE User NOT IN ('root', 'mysql.sys', 'mysql.infoschema', 'mysql.session', 'clusteradmin') AND User NOT LIKE 'mysql_%' AND User NOT LIKE 'mysql_innodb%' ORDER BY User, Host");
+    var users = [];
+    var row;
+    while (row = result.fetchOne()) {
+        var u = {user: row[0], host: row[1], has_password: row[2] == 1, database: '*.*', privileges: 'USAGE'};
+        try {
+            var grants = session.runSql("SHOW GRANTS FOR '" + row[0] + "'@'" + row[1] + "'");
+            var g;
+            while (g = grants.fetchOne()) {
+                var line = g[0];
+                if (line.indexOf('GRANT USAGE') === 0) continue;
+                var m = line.match(/^GRANT\s+(.+?)\s+ON\s+(.+?)\s+TO\s+/);
+                if (m) {
+                    u.privileges = m[1];
+                    u.database = m[2].replace(/`/g, '');
+                }
             }
-        ", 'cluster.switch_primary', $password);
+        } catch(ge) {}
+        users.push(u);
+    }
+    print(JSON.stringify(users));
+} catch(e) {
+    print(JSON.stringify({error: e.message}));
+}
+JSEOF, 'user.list');
+    }
+
+    /**
+     * Get grants for a specific user.
+     */
+    public function getUserGrants(Node $node, string $password, string $user, string $host): array
+    {
+        $escapedUser = addslashes($user);
+        $escapedHost = addslashes($host);
+        $socketUri = 'root@localhost?socket=%2Fvar%2Frun%2Fmysqld%2Fmysqld.sock';
+
+        return $this->runJs($node, "
+try {
+    shell.connect('{$socketUri}');
+    var result = session.runSql(\"SHOW GRANTS FOR '{$escapedUser}'@'{$escapedHost}'\");
+    var grants = [];
+    var row;
+    while (row = result.fetchOne()) {
+        grants.push(row[0]);
+    }
+    print(JSON.stringify({grants: grants}));
+} catch(e) {
+    print(JSON.stringify({error: e.message}));
+}
+", 'user.grants');
+    }
+
+    /**
+     * Create a MySQL user with specified privileges.
+     * Connects as root via Unix socket for full DDL/GRANT privileges.
+     */
+    public function createUser(Node $node, string $password, string $user, string $userPassword, string $host, string $database, string $privileges): array
+    {
+        $escapedUser = addslashes($user);
+        $escapedHost = addslashes($host);
+        $escapedPass = addslashes($userPassword);
+        $dbScope = $database === '*' ? '*.*' : '`'.addslashes($database).'`.*';
+        $socketUri = 'root@localhost?socket=%2Fvar%2Frun%2Fmysqld%2Fmysqld.sock';
+
+        return $this->runJs($node, "
+try {
+    shell.connect('{$socketUri}');
+    session.runSql(\"CREATE USER IF NOT EXISTS '{$escapedUser}'@'{$escapedHost}' IDENTIFIED BY '{$escapedPass}'\");
+    session.runSql(\"GRANT {$privileges} ON {$dbScope} TO '{$escapedUser}'@'{$escapedHost}'\");
+    session.runSql('FLUSH PRIVILEGES');
+    print(JSON.stringify({status: 'ok'}));
+} catch(e) {
+    print(JSON.stringify({error: e.message}));
+}
+", 'user.create');
+    }
+
+    /**
+     * Update a MySQL user's password and/or privileges.
+     */
+    public function updateUser(Node $node, string $password, string $user, string $host, ?string $newPassword, ?string $database, ?string $privileges): array
+    {
+        $escapedUser = addslashes($user);
+        $escapedHost = addslashes($host);
+        $socketUri = 'root@localhost?socket=%2Fvar%2Frun%2Fmysqld%2Fmysqld.sock';
+
+        $statements = '';
+
+        if ($newPassword !== null && $newPassword !== '') {
+            $escapedPass = addslashes($newPassword);
+            $statements .= "session.runSql(\"ALTER USER '{$escapedUser}'@'{$escapedHost}' IDENTIFIED BY '{$escapedPass}'\");";
+        }
+
+        if ($database !== null && $privileges !== null) {
+            $dbScope = $database === '*' ? '*.*' : '`'.addslashes($database).'`.*';
+            $statements .= "session.runSql(\"REVOKE ALL PRIVILEGES, GRANT OPTION FROM '{$escapedUser}'@'{$escapedHost}'\");";
+            $statements .= "session.runSql(\"GRANT {$privileges} ON {$dbScope} TO '{$escapedUser}'@'{$escapedHost}'\");";
+        }
+
+        $statements .= "session.runSql('FLUSH PRIVILEGES');";
+
+        return $this->runJs($node, "
+try {
+    shell.connect('{$socketUri}');
+    {$statements}
+    print(JSON.stringify({status: 'ok'}));
+} catch(e) {
+    print(JSON.stringify({error: e.message}));
+}
+", 'user.update');
+    }
+
+    /**
+     * Drop a MySQL user.
+     */
+    public function dropUser(Node $node, string $password, string $user, string $host): array
+    {
+        $escapedUser = addslashes($user);
+        $escapedHost = addslashes($host);
+        $socketUri = 'root@localhost?socket=%2Fvar%2Frun%2Fmysqld%2Fmysqld.sock';
+
+        return $this->runJs($node, "
+try {
+    shell.connect('{$socketUri}');
+    session.runSql(\"DROP USER '{$escapedUser}'@'{$escapedHost}'\");
+    session.runSql('FLUSH PRIVILEGES');
+    print(JSON.stringify({status: 'ok'}));
+} catch(e) {
+    print(JSON.stringify({error: e.message}));
+}
+", 'user.drop');
+    }
+
+    /**
+     * List databases (excluding system schemas).
+     */
+    public function listDatabases(Node $node, string $password): array
+    {
+        $socketUri = 'root@localhost?socket=%2Fvar%2Frun%2Fmysqld%2Fmysqld.sock';
+
+        return $this->runJs($node, "
+try {
+    shell.connect('{$socketUri}');
+    var result = session.runSql(\"SHOW DATABASES\");
+    var dbs = [];
+    var row;
+    var exclude = ['information_schema', 'mysql', 'performance_schema', 'sys', 'mysql_innodb_cluster_metadata'];
+    while (row = result.fetchOne()) {
+        if (exclude.indexOf(row[0]) === -1) dbs.push(row[0]);
+    }
+    print(JSON.stringify(dbs));
+} catch(e) {
+    print(JSON.stringify({error: e.message}));
+}
+", 'db.list');
+    }
+
+    /**
+     * Create a database.
+     */
+    public function createDatabase(Node $node, string $password, string $database): array
+    {
+        $escapedDb = addslashes($database);
+        $socketUri = 'root@localhost?socket=%2Fvar%2Frun%2Fmysqld%2Fmysqld.sock';
+
+        return $this->runJs($node, "
+try {
+    shell.connect('{$socketUri}');
+    session.runSql('CREATE DATABASE IF NOT EXISTS `{$escapedDb}`');
+    print(JSON.stringify({status: 'ok'}));
+} catch(e) {
+    print(JSON.stringify({error: e.message}));
+}
+", 'db.create');
     }
 
     /**
