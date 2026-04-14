@@ -1,31 +1,179 @@
-# Laravel + Livewire Starter Kit
+# PHPMyCluster
 
-## Introduction
+A web-based management tool for MySQL InnoDB Clusters. Deploy, monitor, and manage highly available MySQL clusters from a single control panel — all over SSH.
 
-Our Laravel + [Livewire](https://livewire.laravel.com) starter kit provides a robust, modern starting point for building Laravel applications with a Livewire frontend.
+Built with Laravel 13, Livewire 3, Flux UI, and Tailwind CSS.
 
-Livewire is a powerful way of building dynamic, reactive, frontend UIs using just PHP. It's a great fit for teams that primarily use Blade templates and are looking for a simpler alternative to JavaScript-driven SPA frameworks like React and Vue.
+## Features
 
-This Livewire starter kit utilizes Livewire 4, TypeScript, Tailwind, and the [Flux UI](https://fluxui.dev) component library.
+- **Cluster Provisioning** — Create InnoDB Clusters from scratch on fresh Debian/Ubuntu servers. Installs MySQL from the official APT repository, configures Group Replication, and bootstraps the cluster via SSH.
+- **Health Monitoring** — Real-time cluster status, node health checks, replication lag tracking, and transaction sync indicators via `cluster.status({extended: 2})`.
+- **Recovery Tools** — Force quorum, reboot from complete outage, rejoin lost nodes, and rescan topology using the MySQL Shell AdminAPI.
+- **MySQL Router** — Bootstrap and manage MySQL Router on dedicated access nodes. Automatic read/write splitting and transparent failover.
+- **Firewall Management** — Automatic UFW configuration with dynamic IP allowlists. Ports are opened only between cluster nodes.
+- **Log Streaming** — Stream error logs, slow query logs, general logs, and systemd journals from any node in real time.
+- **MySQL User Management** — Create, edit, and drop MySQL users with privilege presets. Create databases directly from the UI.
+- **Async Operations** — Long-running tasks (provisioning, status refresh) run as queued jobs with real-time progress tracking.
 
-If you are looking for the alternate configurations of this starter kit, they can be found in the following branches:
+## Requirements
 
-- [workos](https://github.com/laravel/livewire-starter-kit/tree/workos) - if WorkOS is selected for authentication
+- PHP 8.3+
+- Composer
+- Node.js 18+ and npm
+- SQLite (used as the local application database)
+- SSH access to your target servers (Debian/Ubuntu)
 
-## Official Documentation
+## Installation
 
-Documentation for all Laravel starter kits can be found on the [Laravel website](https://laravel.com/docs/starter-kits).
+### 1. Clone the repository
 
-## Contributing
+```bash
+git clone https://github.com/your-org/phpmycluster.git
+cd phpmycluster
+```
 
-Thank you for considering contributing to our starter kit! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### 2. Install dependencies
 
-All contributions to the Starter Kits from now on should be made through [Maestro](https://github.com/laravel/maestro).
+```bash
+composer install
+npm install
+```
 
-## Code of Conduct
+### 3. Configure environment
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+cp .env.example .env
+php artisan key:generate
+```
+
+The default configuration uses SQLite, which requires no additional database setup. The `.env` defaults are:
+
+```
+DB_CONNECTION=sqlite
+QUEUE_CONNECTION=database
+CACHE_STORE=database
+SESSION_DRIVER=database
+```
+
+### 4. Run migrations
+
+```bash
+php artisan migrate
+```
+
+### 5. Build frontend assets
+
+```bash
+npm run build
+```
+
+### 6. Create your admin user
+
+Visit the application in your browser and register. The first registered user is automatically approved and granted admin privileges. Subsequent users require approval from the Users page.
+
+## Running the Application
+
+### Development
+
+```bash
+# Start the Laravel dev server
+php artisan serve
+
+# Start Vite for hot-reloading assets
+npm run dev
+
+# Start the queue worker (required for provisioning and status refresh)
+php artisan queue:work --tries=3
+
+# Optionally run multiple workers for parallel job processing
+php artisan queue:work --tries=3 &
+php artisan queue:work --tries=3 &
+php artisan queue:work --tries=3 &
+```
+
+### Production
+
+Use a process manager like Supervisor to keep the queue workers running. Example Supervisor config:
+
+```ini
+[program:phpmycluster-worker]
+process_name=%(program_name)s_%(process_num)02d
+command=php /path/to/phpmycluster/artisan queue:work --sleep=3 --tries=3 --max-time=1800
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+numprocs=4
+redirect_stderr=true
+stdout_logfile=/path/to/phpmycluster/storage/logs/worker.log
+stopwaitsecs=1800
+```
+
+### Scheduled Tasks
+
+The cluster status refresh runs every minute via the Laravel scheduler. Add this cron entry:
+
+```
+* * * * * cd /path/to/phpmycluster && php artisan schedule:run >> /dev/null 2>&1
+```
+
+## Architecture
+
+PHPMyCluster runs on a **separate control node** and manages your cluster infrastructure over SSH. It does not run on any of the cluster nodes themselves.
+
+```
+┌─────────────────────┐
+│    Control Node      │
+│ PHPMyCluster + SQLite│
+└──────────┬──────────┘
+           │ SSH + mysqlsh
+           │
+    ┌──────┴──────┐
+    │             │
+┌───▼───┐  ┌─────▼─────┐  ┌───────────┐
+│Primary│  │ Secondary  │  │ Secondary │
+│  R/W  │  │    R/O     │  │    R/O    │
+└───┬───┘  └─────┬──────┘  └─────┬─────┘
+    │   Group Replication        │
+    └────────────┬───────────────┘
+                 │
+          ┌──────▼──────┐
+          │MySQL Router │
+          │:6446 R/W    │
+          │:6447 R/O    │
+          └──────┬──────┘
+                 │
+          ┌──────▼──────┐
+          │    Your     │
+          │ Application │
+          └─────────────┘
+```
+
+## Key Technologies
+
+| Component | Technology |
+|-----------|-----------|
+| Backend | Laravel 13 |
+| Frontend | Livewire 3 + Flux UI |
+| Styling | Tailwind CSS v4 |
+| Database | SQLite (app) / MySQL 8.4 (clusters) |
+| SSH | phpseclib3 |
+| Cluster Management | MySQL Shell AdminAPI (JS mode) |
+| Queue | Laravel database driver |
+
+## SSH Key Setup
+
+PHPMyCluster connects to your servers via SSH. You can either:
+
+1. **Generate a key pair** during cluster setup (the public key is displayed for you to add to each server's `~/.ssh/authorized_keys`)
+2. **Provide an existing private key** during cluster setup
+
+The SSH user must have `sudo` privileges on all target servers, as PHPMyCluster needs root access to install packages and configure MySQL.
+
+## MySQL Shell
+
+MySQL Shell (`mysqlsh`) is installed automatically on each cluster node during provisioning. PHPMyCluster connects to the nodes via SSH and executes `mysqlsh` commands remotely using the AdminAPI in JavaScript mode. There is no need to install MySQL Shell on the control node.
 
 ## License
 
-The Laravel + Livewire starter kit is open-sourced software licensed under the MIT license.
+This project is licensed under the GNU General Public License v3.0 — see the [LICENSE](LICENSE) file for details.
