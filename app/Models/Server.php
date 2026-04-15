@@ -42,4 +42,9 @@ class Server extends Model
     {
         return $this->hasMany(MysqlNode::class);
     }
+
+    public function redisNodes(): HasMany
+    {
+        return $this->hasMany(RedisNode::class);
+    }
 }

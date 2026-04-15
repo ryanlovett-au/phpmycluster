@@ -8,6 +8,7 @@
         <div class="flex items-center justify-between">
             <div>
                 <div class="flex items-center gap-3">
+                    <flux:icon.circle-stack class="size-6 text-blue-500" />
                     <flux:heading size="xl">{{ $cluster->name }}</flux:heading>
                     <flux:badge :color="match($cluster->status->value) {
                         'online' => 'green',
@@ -301,6 +302,14 @@
         {{-- ═══════════════════════════════════════════════════════════════ --}}
         <div>
             <flux:heading size="lg" class="mb-3">{{ __('MySQL Routers') }}</flux:heading>
+
+            @if($routerNodes->isEmpty() && !$showAddRouter && !$settingUpRouter)
+                <div class="rounded-xl border border-neutral-200 p-6 text-center dark:border-neutral-700">
+                    <flux:icon.server variant="outline" class="mx-auto mb-2 size-8 text-zinc-400" />
+                    <flux:heading size="sm">{{ __('No MySQL Routers') }}</flux:heading>
+                    <flux:text class="mt-1 text-sm">{{ __('No routers have been set up yet. Click "Add Router" to deploy one.') }}</flux:text>
+                </div>
+            @endif
 
             @if($routerNodes->isNotEmpty())
                 <div class="grid gap-4">

@@ -11,7 +11,7 @@ it('allows an approved user to view the cluster manager page', function () {
     $cluster = MysqlCluster::factory()->online()->create();
 
     $this->actingAs($user)
-        ->get(route('cluster.manage', $cluster))
+        ->get(route('mysql.manage', $cluster))
         ->assertOk();
 });
 
@@ -20,7 +20,7 @@ it('redirects an unapproved user away from the cluster manager', function () {
     $cluster = MysqlCluster::factory()->online()->create();
 
     $this->actingAs($user)
-        ->get(route('cluster.manage', $cluster))
+        ->get(route('mysql.manage', $cluster))
         ->assertRedirect(route('approval.pending'));
 });
 

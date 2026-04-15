@@ -14,7 +14,7 @@ it('allows an approved user to view the router manager', function () {
     $cluster = MysqlCluster::factory()->online()->create();
 
     $this->actingAs($user)
-        ->get(route('cluster.routers', $cluster))
+        ->get(route('mysql.routers', $cluster))
         ->assertOk();
 });
 

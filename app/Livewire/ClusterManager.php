@@ -757,7 +757,7 @@ class ClusterManager extends Component
      */
     public function reprovision()
     {
-        return $this->redirect(route('cluster.reprovision', $this->cluster), navigate: true);
+        return $this->redirect(route('mysql.reprovision', $this->cluster), navigate: true);
     }
 
     /**

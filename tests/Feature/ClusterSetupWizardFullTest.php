@@ -39,7 +39,7 @@ it('renders the create cluster heading', function () {
 
     Livewire::actingAs($user)
         ->test(ClusterSetupWizard::class)
-        ->assertSee('Create InnoDB Cluster');
+        ->assertSee('Create MySQL Cluster');
 });
 
 // ─── mount() with existing cluster (reprovision) ───────────────────────────

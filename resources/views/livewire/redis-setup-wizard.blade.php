@@ -1,40 +1,49 @@
     <div class="mx-auto max-w-2xl">
         <div class="mb-8">
             <div class="mb-4 flex items-center gap-3">
-                <div class="flex size-10 items-center justify-center rounded-lg bg-blue-500/10">
-                    <flux:icon.circle-stack class="size-6 text-blue-500" />
+                <div class="flex size-10 items-center justify-center rounded-lg bg-red-500/10">
+                    <flux:icon.server-stack class="size-6 text-red-500" />
                 </div>
                 @if($isReprovision)
-                    <flux:heading size="xl">{{ __('Re-provision Cluster: :name', ['name' => $clusterName]) }}</flux:heading>
+                    <flux:heading size="xl">{{ __('Re-provision Redis Cluster: :name', ['name' => $clusterName]) }}</flux:heading>
                 @else
-                    <flux:heading size="xl">{{ __('Create MySQL Cluster') }}</flux:heading>
+                    <flux:heading size="xl">{{ __('Create Redis Sentinel Cluster') }}</flux:heading>
                 @endif
             </div>
             @if($isReprovision)
                 <flux:text class="mt-1">{{ __('Re-configure the SSH key and re-run provisioning for this cluster.') }}</flux:text>
             @else
-                <flux:text class="mt-1">{{ __('This wizard will guide you through setting up a new MySQL InnoDB Cluster from scratch.') }}</flux:text>
+                <flux:text class="mt-1">{{ __('This wizard will guide you through setting up a new Redis Sentinel cluster for high availability.') }}</flux:text>
             @endif
         </div>
 
         {{-- Step indicator --}}
+        @php
+            $wizardSteps = ($serverMode === 'existing' && $availableServers->isNotEmpty())
+                ? ['Cluster Details', 'Master Node', 'Provision']
+                : ['Cluster Details', 'Master Node', 'SSH Key', 'Provision'];
+            $stepMap = ($serverMode === 'existing' && $availableServers->isNotEmpty())
+                ? [1, 2, 4]
+                : [1, 2, 3, 4];
+        @endphp
         <div class="mb-8 flex items-center gap-2">
-            @foreach(['Cluster Details', 'Primary Node', 'SSH Key', 'Provision'] as $i => $label)
+            @foreach($wizardSteps as $i => $label)
+                @php $realStep = $stepMap[$i]; @endphp
                 <div class="flex items-center">
                     <span style="width: 28px; height: 28px; min-width: 28px;" @class([
                         'inline-flex items-center justify-center rounded-full text-xs font-bold',
-                        'bg-blue-500 text-white' => $step === $i + 1,
-                        'bg-green-500 text-white' => $step > $i + 1,
-                        'bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400' => $step < $i + 1,
+                        'bg-red-500 text-white' => $step === $realStep,
+                        'bg-green-500 text-white' => $step > $realStep,
+                        'bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400' => $step < $realStep,
                     ])>{{ $i + 1 }}</span>
                     <span style="margin-left: 10px;" @class([
                         'text-sm whitespace-nowrap',
-                        'font-medium' => $step === $i + 1,
-                        'text-green-500' => $step > $i + 1,
-                        'text-zinc-400' => $step < $i + 1,
+                        'font-medium' => $step === $realStep,
+                        'text-green-500' => $step > $realStep,
+                        'text-zinc-400' => $step < $realStep,
                     ])>{{ $label }}</span>
                 </div>
-                @if($i < 3)
+                @if($i < count($wizardSteps) - 1)
                     <div class="h-px w-6 bg-zinc-300 dark:bg-zinc-600"></div>
                 @endif
             @endforeach
@@ -46,20 +55,20 @@
                 <flux:heading size="lg" class="mb-4">{{ __('Cluster Configuration') }}</flux:heading>
 
                 <div class="space-y-4">
-                    <flux:input wire:model="clusterName" label="{{ __('Cluster Name') }}" placeholder="e.g. production-cluster" />
+                    <flux:input wire:model="clusterName" label="{{ __('Cluster Name') }}" placeholder="e.g. redis-production" />
                     @error('clusterName') <flux:text class="!text-red-500">{{ $message }}</flux:text> @enderror
 
-                    <flux:select wire:model="communicationStack" label="{{ __('Communication Stack') }}">
-                        <flux:select.option value="MYSQL">MYSQL (recommended for MySQL 8.0.27+)</flux:select.option>
-                        <flux:select.option value="XCOM">XCOM (legacy)</flux:select.option>
-                    </flux:select>
-                    <flux:text class="text-xs">{{ __('MYSQL stack uses port 3306 for GR communication. XCOM uses a separate port (33061).') }}</flux:text>
+                    <flux:input wire:model="authPassword" type="password" label="{{ __('Redis AUTH Password') }}" placeholder="Minimum 12 characters" />
+                    @error('authPassword') <flux:text class="!text-red-500">{{ $message }}</flux:text> @enderror
+                    <flux:text class="text-xs">{{ __('The requirepass / masterauth password used by all Redis and Sentinel instances.') }}</flux:text>
 
-                    <flux:input wire:model="clusterAdminUser" label="{{ __('Cluster Admin Username') }}" />
+                    <flux:input wire:model="sentinelPassword" type="password" label="{{ __('Sentinel Password') }}" placeholder="Optional — defaults to AUTH password if blank" />
+                    @error('sentinelPassword') <flux:text class="!text-red-500">{{ $message }}</flux:text> @enderror
+                    <flux:text class="text-xs">{{ __('A separate password for Sentinel-to-Sentinel authentication. Leave blank to reuse the AUTH password.') }}</flux:text>
 
-                    <flux:input wire:model="clusterAdminPassword" type="password" label="{{ __('Cluster Admin Password') }}" placeholder="Minimum 12 characters" />
-                    @error('clusterAdminPassword') <flux:text class="!text-red-500">{{ $message }}</flux:text> @enderror
-                    <flux:text class="text-xs">{{ __('This user will be created on all cluster nodes for administrative access.') }}</flux:text>
+                    <flux:input wire:model.number="quorum" type="number" label="{{ __('Sentinel Quorum') }}" />
+                    @error('quorum') <flux:text class="!text-red-500">{{ $message }}</flux:text> @enderror
+                    <flux:text class="text-xs">{{ __('Number of Sentinels that must agree for failover. A quorum of 2 is recommended for a 3-node setup.') }}</flux:text>
                 </div>
 
                 <div class="mt-6 flex justify-end">
@@ -68,29 +77,76 @@
             </flux:card>
         @endif
 
-        {{-- Step 2: Primary Node --}}
+        {{-- Step 2: Master Node Details --}}
         @if($step === 2)
             <flux:card>
-                <flux:heading size="lg" class="mb-2">{{ __('Primary Node') }}</flux:heading>
-                <flux:text class="mb-4">{{ __('This is the first node in your cluster and will become the primary. It should be a fresh Debian or Ubuntu server.') }}</flux:text>
+                <flux:heading size="lg" class="mb-2">{{ __('Master Node') }}</flux:heading>
+                <flux:text class="mb-4">{{ __('Choose where to deploy the Redis master node.') }}</flux:text>
 
                 <div class="space-y-4">
-                    <flux:input wire:model="seedName" label="{{ __('Node Name') }}" placeholder="e.g. db-primary-1 (optional)" />
+                    @if($availableServers->isNotEmpty())
+                        <flux:radio.group wire:model.live="serverMode" label="{{ __('Server') }}">
+                            <flux:radio value="existing" label="{{ __('Use an existing server') }}" />
+                            <flux:radio value="new" label="{{ __('Configure a new server') }}" />
+                        </flux:radio.group>
+                    @endif
 
-                    <flux:input wire:model="seedHost" label="{{ __('Host (IP Address or Hostname)') }}" placeholder="e.g. 192.168.1.10 or db1.example.com" />
-                    @error('seedHost') <flux:text class="!text-red-500">{{ $message }}</flux:text> @enderror
+                    @if($serverMode === 'existing' && $availableServers->isNotEmpty())
+                        <div class="space-y-2">
+                            @foreach($availableServers as $server)
+                                <label wire:click="$set('selectedServerId', {{ $server->id }})" @class([
+                                    'flex cursor-pointer items-center justify-between rounded-lg border p-4 transition',
+                                    'border-red-500 bg-red-50 dark:bg-red-900/10' => $selectedServerId === $server->id,
+                                    'border-neutral-200 hover:border-neutral-300 dark:border-neutral-700 dark:hover:border-neutral-600' => $selectedServerId !== $server->id,
+                                ])>
+                                    <div class="flex items-center gap-3">
+                                        <flux:icon.server variant="mini" @class([
+                                            'size-5',
+                                            'text-red-500' => $selectedServerId === $server->id,
+                                            'text-zinc-400' => $selectedServerId !== $server->id,
+                                        ]) />
+                                        <div>
+                                            <div class="font-medium">{{ $server->name }}</div>
+                                            <div class="text-xs text-zinc-500">{{ $server->ssh_user . '@' . $server->host . ':' . $server->ssh_port }}</div>
+                                        </div>
+                                    </div>
+                                    @if($selectedServerId === $server->id)
+                                        <flux:icon.check-circle variant="mini" class="size-5 text-red-500" />
+                                    @endif
+                                </label>
+                            @endforeach
+                            @error('selectedServerId') <flux:text class="!text-red-500">{{ $message }}</flux:text> @enderror
+                        </div>
 
-                    <div class="grid grid-cols-2 gap-4">
-                        <flux:input wire:model.number="seedSshPort" type="number" label="{{ __('SSH Port') }}" />
-                        <flux:input wire:model="seedSshUser" label="{{ __('SSH User') }}" />
-                    </div>
-                    <flux:text class="text-xs">{{ __('The SSH user must be root or have passwordless sudo access (NOPASSWD:ALL).') }}</flux:text>
+                        <flux:separator />
 
-                    <flux:input wire:model.number="seedMysqlPort" type="number" label="{{ __('MySQL Port') }}" />
+                        <div class="grid grid-cols-2 gap-4">
+                            <flux:input wire:model.number="masterRedisPort" type="number" label="{{ __('Redis Port') }}" />
+                            <flux:input wire:model.number="masterSentinelPort" type="number" label="{{ __('Sentinel Port') }}" />
+                        </div>
 
-                    <flux:input wire:model="mysqlRootPassword" type="password" label="{{ __('MySQL Root Password') }}" placeholder="Root password for initial MySQL setup" />
-                    @error('mysqlRootPassword') <flux:text class="!text-red-500">{{ $message }}</flux:text> @enderror
-                    <flux:text class="text-xs">{{ __('The initial root password set during MySQL installation. Only used for initial configuration.') }}</flux:text>
+                        <flux:input wire:model="masterNodeName" label="{{ __('Node Name') }}" placeholder="redis-master-1" />
+                        <flux:text class="text-xs">{{ __('A friendly name for this node (optional). Used for display purposes.') }}</flux:text>
+                    @else
+                        <flux:text class="mb-2 text-sm">{{ __('Configure the connection details for the Redis master node. This should be a fresh Debian or Ubuntu server.') }}</flux:text>
+
+                        <flux:input wire:model="masterHost" label="{{ __('Host / IP') }}" placeholder="e.g. 192.168.1.10 or redis1.example.com" />
+                        @error('masterHost') <flux:text class="!text-red-500">{{ $message }}</flux:text> @enderror
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <flux:input wire:model.number="masterSshPort" type="number" label="{{ __('SSH Port') }}" />
+                            <flux:input wire:model="masterSshUser" label="{{ __('SSH User') }}" />
+                        </div>
+                        <flux:text class="text-xs">{{ __('The SSH user must be root or have passwordless sudo access (NOPASSWD:ALL).') }}</flux:text>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <flux:input wire:model.number="masterRedisPort" type="number" label="{{ __('Redis Port') }}" />
+                            <flux:input wire:model.number="masterSentinelPort" type="number" label="{{ __('Sentinel Port') }}" />
+                        </div>
+
+                        <flux:input wire:model="masterNodeName" label="{{ __('Node Name') }}" placeholder="redis-master-1" />
+                        <flux:text class="text-xs">{{ __('A friendly name for this node (optional). Used for display purposes.') }}</flux:text>
+                    @endif
                 </div>
 
                 <div class="mt-6 flex justify-between">
@@ -138,7 +194,7 @@
                                 <flux:callout variant="warning" icon="exclamation-triangle">
                                     <flux:callout.heading>{{ __('Add this public key to your server') }}</flux:callout.heading>
                                     <flux:callout.text>
-                                        SSH into <code class="font-mono font-bold">{{ $seedHost ?: 'your server' }}</code> and run:
+                                        SSH into <code class="font-mono font-bold">{{ $masterHost ?: 'your server' }}</code> and run:
                                     </flux:callout.text>
                                     <div x-data="{ copied: false, cmd: @js('mkdir -p ~/.ssh && echo "' . $generatedKeyPair['public'] . '" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys') }">
                                         <code class="mt-2 block rounded bg-zinc-900 p-2 text-xs text-green-400 break-all">mkdir -p ~/.ssh && echo "{{ $generatedKeyPair['public'] }}" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys</code>
@@ -201,7 +257,7 @@
         {{-- Step 4: Provision --}}
         @if($step === 4)
             <flux:card>
-                <flux:heading size="lg" class="mb-2">{{ __('Provision & Create Cluster') }}</flux:heading>
+                <flux:heading size="lg" class="mb-2">{{ __('Provision Redis Cluster') }}</flux:heading>
 
                 @if(!$provisioning && !$provisioningComplete)
                     <div class="mb-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-700">
@@ -209,12 +265,14 @@
                         <dl class="grid grid-cols-2 gap-2 text-sm">
                             <dt class="text-zinc-500">{{ __('Cluster Name') }}</dt>
                             <dd>{{ $clusterName }}</dd>
-                            <dt class="text-zinc-500">{{ __('Primary Node') }}</dt>
-                            <dd>{{ $seedHost }}:{{ $seedMysqlPort }}</dd>
+                            <dt class="text-zinc-500">{{ __('Master Node') }}</dt>
+                            <dd>{{ $masterHost }}:{{ $masterRedisPort }}</dd>
+                            <dt class="text-zinc-500">{{ __('Sentinel Port') }}</dt>
+                            <dd>{{ $masterSentinelPort }}</dd>
                             <dt class="text-zinc-500">{{ __('SSH') }}</dt>
-                            <dd>{{ $seedSshUser . '@' . $seedHost . ':' . $seedSshPort }}</dd>
-                            <dt class="text-zinc-500">{{ __('Admin User') }}</dt>
-                            <dd>{{ $clusterAdminUser }}</dd>
+                            <dd>{{ $masterSshUser . '@' . $masterHost . ':' . $masterSshPort }}</dd>
+                            <dt class="text-zinc-500">{{ __('Quorum') }}</dt>
+                            <dd>{{ $quorum }}</dd>
                         </dl>
                     </div>
 
@@ -224,19 +282,15 @@
                                 {{ __('The host will be probed to detect what is already provisioned. Completed steps will be skipped automatically.') }}
                             </flux:callout.text>
                         </flux:callout>
-
-                        <div class="mb-4">
-                            <flux:input wire:model="mysqlRootPassword" type="password" label="{{ __('MySQL Root Password (only needed if MySQL has not been configured yet)') }}" placeholder="Leave blank if already configured" />
-                        </div>
                     @else
                         <flux:callout variant="warning" icon="exclamation-triangle" class="mb-4">
                             <flux:callout.text>
-                                {{ __('This will install MySQL 8.4, configure it for InnoDB Cluster, configure the firewall, and create the cluster. This process may take several minutes.') }}
+                                {{ __('This will install Redis, configure Sentinel for high availability, set up authentication, and configure the firewall. This process may take several minutes.') }}
                             </flux:callout.text>
                         </flux:callout>
                     @endif
 
-                    <flux:button wire:click="provision" variant="primary" icon="rocket-launch">
+                    <flux:button wire:click="startProvision" variant="primary" icon="rocket-launch">
                         {{ $isReprovision ? __('Begin Re-provisioning') : __('Begin Provisioning') }}
                     </flux:button>
                 @endif
@@ -275,10 +329,10 @@
 
                 @if($provisioningComplete)
                     <flux:callout variant="success" icon="check-circle" class="mt-6">
-                        <flux:callout.heading>{{ __('Cluster Created Successfully!') }}</flux:callout.heading>
+                        <flux:callout.heading>{{ __('Redis Cluster Created Successfully!') }}</flux:callout.heading>
                         <flux:callout.text>
-                            <flux:button variant="primary" href="{{ route('mysql.manage', $clusterId) }}" wire:navigate class="mt-2">
-                                {{ __('Go to Cluster Manager') }}
+                            <flux:button variant="primary" href="{{ route('redis.manage', $clusterId) }}" wire:navigate class="mt-2">
+                                {{ __('Manage Cluster') }}
                             </flux:button>
                         </flux:callout.text>
                     </flux:callout>

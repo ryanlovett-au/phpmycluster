@@ -1213,7 +1213,7 @@ it('redirects to reprovision route', function () {
     Livewire::actingAs($user)
         ->test(ClusterManager::class, ['cluster' => $cluster])
         ->call('reprovision')
-        ->assertRedirect(route('cluster.reprovision', $cluster));
+        ->assertRedirect(route('mysql.reprovision', $cluster));
 });
 
 // ─── removeNode() ───────────────────────────────────────────────────────────

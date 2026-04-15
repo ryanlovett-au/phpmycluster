@@ -4,14 +4,14 @@
                 <flux:heading size="xl">{{ $node->name }} — {{ __('Logs') }}</flux:heading>
                 <flux:text>{{ $node->server->host }} ({{ ucfirst($node->role->value) }})</flux:text>
             </div>
-            <flux:button href="{{ route('mysql.manage', $node->cluster_id) }}" wire:navigate icon="arrow-left">
+            <flux:button href="{{ route('redis.manage', $node->redis_cluster_id) }}" wire:navigate icon="arrow-left">
                 {{ __('Back to Cluster') }}
             </flux:button>
         </div>
 
         {{-- Log type selector --}}
         <div class="flex gap-2">
-            @foreach(['error' => 'Error Log', 'slow' => 'Slow Query', 'general' => 'General', 'systemd' => 'Systemd', 'router' => 'Router'] as $type => $label)
+            @foreach(['redis' => 'Redis Log', 'sentinel' => 'Sentinel Log', 'systemd-redis' => 'Systemd Redis', 'systemd-sentinel' => 'Systemd Sentinel'] as $type => $label)
                 <flux:button wire:click="setLogType('{{ $type }}')" size="sm" :variant="$logType === $type ? 'primary' : 'ghost'">
                     {{ __($label) }}
                 </flux:button>

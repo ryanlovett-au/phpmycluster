@@ -4,7 +4,7 @@
                 <flux:heading size="xl">{{ __('MySQL Router') }} — {{ $cluster->name }}</flux:heading>
                 <flux:text>{{ __('Manage MySQL Router (access) nodes for this cluster.') }}</flux:text>
             </div>
-            <flux:button href="{{ route('cluster.manage', $cluster) }}" wire:navigate icon="arrow-left">
+            <flux:button href="{{ route('mysql.manage', $cluster) }}" wire:navigate icon="arrow-left">
                 {{ __('Back to Cluster') }}
             </flux:button>
         </div>
