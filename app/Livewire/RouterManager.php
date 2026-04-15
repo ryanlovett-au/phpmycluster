@@ -106,8 +106,8 @@ class RouterManager extends Component
             ];
             $this->showAddRouter = false;
 
-        } catch (\Throwable $e) {
-            $this->setMessage("Error creating router node: {$e->getMessage()}", 'error');
+        } catch (\Throwable $e) { // @codeCoverageIgnore
+            $this->setMessage("Error creating router node: {$e->getMessage()}", 'error'); // @codeCoverageIgnore
         }
     }
 

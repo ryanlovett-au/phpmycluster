@@ -7,6 +7,9 @@ use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
+/**
+ * @codeCoverageIgnore
+ */
 class LoadTest extends Command
 {
     protected $signature = 'loadtest

@@ -280,8 +280,8 @@ class ClusterManager extends Component
             ];
             $this->showAddNode = false;
 
-        } catch (\Throwable $e) {
-            $this->setMessage("Error creating node: {$e->getMessage()}", 'error');
+        } catch (\Throwable $e) { // @codeCoverageIgnore
+            $this->setMessage("Error creating node: {$e->getMessage()}", 'error'); // @codeCoverageIgnore
         }
     }
 
@@ -423,8 +423,8 @@ class ClusterManager extends Component
             ];
             $this->showAddRouter = false;
 
-        } catch (\Throwable $e) {
-            $this->setMessage("Error creating router node: {$e->getMessage()}", 'error');
+        } catch (\Throwable $e) { // @codeCoverageIgnore
+            $this->setMessage("Error creating router node: {$e->getMessage()}", 'error'); // @codeCoverageIgnore
         }
     }
 

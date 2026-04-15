@@ -69,7 +69,18 @@ trait ProvisionesNode
             $this->installMysql($cluster, $node, $provisionService);
         }
 
-        // Step 4: Write MySQL config (skip if already present)
+        // Step 4: Detect system hardware for performance tuning
+        $this->addStep('Detecting system hardware...');
+        $sysInfo = $provisionService->detectSystemInfo($node);
+        $node->refresh();
+        if ($sysInfo['ram_mb'] > 0) {
+            $ramGb = round($sysInfo['ram_mb'] / 1024, 1);
+            $this->addStep("{$ramGb}GB RAM, {$sysInfo['cpu_cores']} CPU cores detected.", 'success');
+        } else {
+            $this->addStep('Could not detect RAM — using default MySQL settings.', 'success');
+        }
+
+        // Step 5: Write MySQL config (skip if already present)
         if ($state['config_exists']) {
             $this->addStep('InnoDB Cluster config already present, skipping.', 'success');
         } else {

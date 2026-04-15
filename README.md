@@ -174,6 +174,38 @@ The SSH user must have `sudo` privileges on all target servers, as PHPMyCluster 
 
 MySQL Shell (`mysqlsh`) is installed automatically on each cluster node during provisioning. PHPMyCluster connects to the nodes via SSH and executes `mysqlsh` commands remotely using the AdminAPI in JavaScript mode. There is no need to install MySQL Shell on the control node.
 
+## Load Testing
+
+PHPMyCluster ships with a built-in load testing tool that can create a sample schema, generate bulk data, and reset a target MySQL database. This is useful for stress-testing your InnoDB Cluster.
+
+```bash
+# Check current table sizes
+php artisan loadtest status --host=127.0.0.1 --password=test
+
+# Generate ~5 GB of test data (default)
+php artisan loadtest seed --host=127.0.0.1 --password=test
+
+# Generate a custom amount
+php artisan loadtest seed --host=127.0.0.1 --password=test --size=10
+
+# Drop all tables and recreate empty schema
+php artisan loadtest reset --host=127.0.0.1 --password=test
+```
+
+### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--host` | `127.0.0.1` | MySQL host |
+| `--port` | `6446` | MySQL port (default is the Router R/W port) |
+| `--database` | `test` | Target database |
+| `--username` | `test` | MySQL username |
+| `--password` | | MySQL password |
+| `--size` | `5` | Target data size in GB (approximate) |
+| `--batch-size` | `5000` | Rows per INSERT batch |
+
+The `seed` action creates 9 tables (categories, suppliers, employees, customers, products, product_suppliers, orders, order_items, reviews) and populates them with realistic fake data. It is idempotent — re-running it will skip tables that are already at the target row count.
+
 ## License
 
 This project is licensed under the GNU General Public License v3.0 — see the [LICENSE](LICENSE) file for details.

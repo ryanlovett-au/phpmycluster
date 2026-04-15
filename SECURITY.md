@@ -41,3 +41,39 @@ When deploying PHPMyCluster, please ensure:
 - **Run queue workers under a dedicated system user** — avoid running them as root.
 - **Keep dependencies up to date** — regularly run `composer update` and `npm update` to patch vulnerabilities.
 - **Back up your `APP_KEY`** — if you lose it, all encrypted SSH keys in the database become unrecoverable.
+- **Run the security audit regularly** — use the built-in static analysis tool to check for vulnerabilities.
+
+## Security Audit
+
+PHPMyCluster includes a built-in static security scanner that checks for common vulnerabilities specific to this application.
+
+```bash
+# Run the full audit
+php artisan security:audit
+
+# Show remediation suggestions
+php artisan security:audit --fix
+
+# Filter by severity
+php artisan security:audit --severity=critical
+
+# Output as JSON (for CI pipelines)
+php artisan security:audit --output=json
+```
+
+The audit scans for:
+
+- **Command Injection** — SSH commands with unsanitised user input
+- **SQL Injection** — raw queries with string interpolation
+- **SSH Key Exposure** — private keys logged, dumped, or exposed in responses
+- **Mass Assignment** — models missing `$fillable` or with empty `$guarded`
+- **Input Validation** — controllers and Livewire components missing validation
+- **XSS** — unescaped Blade output (`{!! !!}`) with user-controlled data
+- **Rate Limiting** — missing throttle middleware on authentication routes
+- **Session Configuration** — insecure cookie settings
+- **Credential Exposure** — hardcoded secrets in source code
+- **Configuration** — `.env` file permissions, debug mode, missing `APP_KEY`
+- **Debug Artifacts** — `dd()`, `dump()`, `var_dump()` left in code
+- **Encryption** — SSH key column types and database file permissions
+
+The command returns a non-zero exit code if any critical or high severity findings are detected, making it suitable for CI/CD pipelines.

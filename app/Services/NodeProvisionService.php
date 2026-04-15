@@ -46,6 +46,126 @@ class NodeProvisionService
     }
 
     /**
+     * Detect system hardware (RAM, CPU cores, OS) and store on the node.
+     */
+    public function detectSystemInfo(Node $node): array
+    {
+        // Get total RAM in MB
+        $ramResult = $this->ssh->exec(
+            $node,
+            "awk '/MemTotal/{printf \"%d\", \$2/1024}' /proc/meminfo 2>/dev/null",
+            'provision.detect_ram'
+        );
+        $ramMb = (int) trim($ramResult['output'] ?? '0');
+
+        // Get CPU core count
+        $cpuResult = $this->ssh->exec(
+            $node,
+            'nproc 2>/dev/null || grep -c ^processor /proc/cpuinfo 2>/dev/null',
+            'provision.detect_cpu'
+        );
+        $cpuCores = (int) trim($cpuResult['output'] ?? '0');
+
+        // Get OS pretty name
+        $osResult = $this->ssh->exec(
+            $node,
+            "grep PRETTY_NAME /etc/os-release 2>/dev/null | cut -d= -f2 | tr -d '\"'",
+            'provision.detect_os_name'
+        );
+        $osName = trim($osResult['output'] ?? '');
+
+        $node->update([
+            'ram_mb' => $ramMb ?: null,
+            'cpu_cores' => $cpuCores ?: null,
+            'os_name' => $osName ?: null,
+        ]);
+
+        return [
+            'ram_mb' => $ramMb,
+            'cpu_cores' => $cpuCores,
+            'os_name' => $osName,
+        ];
+    }
+
+    /**
+     * Calculate tuned MySQL configuration values based on available RAM.
+     *
+     * Follows MySQL best practices:
+     * - innodb_buffer_pool_size: 50-70% of RAM (conservative for shared hosts)
+     * - innodb_log_file_size: 25% of buffer pool (up to 2GB)
+     * - innodb_buffer_pool_instances: 1 per GB of buffer pool (max 64)
+     * - max_connections: scaled by RAM
+     * - table_open_cache / open_files_limit: scaled by max_connections
+     * - tmp_table_size / max_heap_table_size: scaled by RAM
+     */
+    public function calculateTuning(int $ramMb, int $cpuCores = 1): array
+    {
+        // InnoDB buffer pool: 60% of RAM for dedicated MySQL servers
+        $bufferPoolMb = max(128, (int) ($ramMb * 0.6));
+        $bufferPoolBytes = $bufferPoolMb * 1024 * 1024;
+
+        // Buffer pool instances: 1 per GB of buffer pool, min 1, max 64
+        $bufferPoolInstances = max(1, min(64, (int) ($bufferPoolMb / 1024)));
+
+        // InnoDB redo log size: 25% of buffer pool, capped at 2GB
+        $redoLogMb = max(48, min(2048, (int) ($bufferPoolMb * 0.25)));
+
+        // Max connections: scale with RAM
+        $maxConnections = match (true) {
+            $ramMb >= 32768 => 500,  // 32GB+
+            $ramMb >= 16384 => 300,  // 16GB+
+            $ramMb >= 8192 => 200,   // 8GB+
+            $ramMb >= 4096 => 150,   // 4GB+
+            $ramMb >= 2048 => 100,   // 2GB+
+            default => 50,
+        };
+
+        // Table open cache: ~4x max_connections
+        $tableOpenCache = $maxConnections * 4;
+
+        // Temp table sizes: ~1% of RAM, min 16MB max 256MB
+        $tmpTableMb = max(16, min(256, (int) ($ramMb * 0.01)));
+
+        // Sort/join/read buffers: scale modestly
+        $sortBufferKb = max(256, min(4096, (int) ($ramMb * 0.001 * 1024)));
+        $joinBufferKb = $sortBufferKb;
+        $readBufferKb = max(128, min(2048, (int) ($ramMb * 0.0005 * 1024)));
+
+        // Thread cache: scale with connections
+        $threadCacheSize = max(8, min(100, (int) ($maxConnections * 0.25)));
+
+        // Parallel workers for replication: scale with CPU cores
+        $replicaParallelWorkers = max(2, min(32, $cpuCores));
+
+        return [
+            'innodb_buffer_pool_size' => $this->formatBytes($bufferPoolBytes),
+            'innodb_buffer_pool_instances' => $bufferPoolInstances,
+            'innodb_redo_log_capacity' => "{$redoLogMb}M",
+            'max_connections' => $maxConnections,
+            'table_open_cache' => $tableOpenCache,
+            'tmp_table_size' => "{$tmpTableMb}M",
+            'max_heap_table_size' => "{$tmpTableMb}M",
+            'sort_buffer_size' => "{$sortBufferKb}K",
+            'join_buffer_size' => "{$joinBufferKb}K",
+            'read_buffer_size' => "{$readBufferKb}K",
+            'thread_cache_size' => $threadCacheSize,
+            'replica_parallel_workers' => $replicaParallelWorkers,
+        ];
+    }
+
+    /**
+     * Format bytes into a human-readable MySQL config value.
+     */
+    protected function formatBytes(int $bytes): string
+    {
+        if ($bytes >= 1073741824 && $bytes % 1073741824 === 0) {
+            return ($bytes / 1073741824).'G';
+        }
+
+        return ((int) ($bytes / 1048576)).'M';
+    }
+
+    /**
      * Resolve the latest mysql-apt-config version from the MySQL repo directory listing.
      *
      * Fetches https://repo.mysql.com/ and parses the HTML for the latest
@@ -310,10 +430,39 @@ class NodeProvisionService
 
     /**
      * Write the InnoDB Cluster MySQL configuration file on a node.
+     *
+     * If the node has detected RAM/CPU info, performance tuning parameters
+     * are calculated and included automatically.
      */
     public function writeMysqlConfig(Node $node): array
     {
         $serverId = $node->server_id ?? $node->id;
+        $ramMb = $node->ram_mb ?? 0;
+        $cpuCores = $node->cpu_cores ?? 1;
+
+        // Build performance tuning section if RAM is known
+        $tuningSection = '';
+        if ($ramMb > 0) {
+            $tuning = $this->calculateTuning($ramMb, $cpuCores);
+            $tuningSection = <<<EOT
+
+
+# Performance tuning (auto-tuned for {$ramMb}MB RAM, {$cpuCores} cores)
+innodb_buffer_pool_size = {$tuning['innodb_buffer_pool_size']}
+innodb_buffer_pool_instances = {$tuning['innodb_buffer_pool_instances']}
+innodb_redo_log_capacity = {$tuning['innodb_redo_log_capacity']}
+max_connections = {$tuning['max_connections']}
+table_open_cache = {$tuning['table_open_cache']}
+tmp_table_size = {$tuning['tmp_table_size']}
+max_heap_table_size = {$tuning['max_heap_table_size']}
+sort_buffer_size = {$tuning['sort_buffer_size']}
+join_buffer_size = {$tuning['join_buffer_size']}
+read_buffer_size = {$tuning['read_buffer_size']}
+thread_cache_size = {$tuning['thread_cache_size']}
+EOT;
+        }
+
+        $replicaWorkers = $ramMb > 0 ? $this->calculateTuning($ramMb, $cpuCores)['replica_parallel_workers'] : max(2, $cpuCores);
 
         $config = <<<EOT
 # InnoDB Cluster configuration - managed by PHPMyCluster
@@ -342,8 +491,8 @@ port = {$node->mysql_port}
 mysqlx-port = {$node->mysql_x_port}
 
 # Replication tuning
-replica_parallel_workers = 4
-replica_preserve_commit_order = ON
+replica_parallel_workers = {$replicaWorkers}
+replica_preserve_commit_order = ON{$tuningSection}
 EOT;
 
         $this->ssh->uploadFile($node, '/tmp/innodb-cluster.cnf', $config);

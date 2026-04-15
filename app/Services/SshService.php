@@ -31,6 +31,8 @@ class SshService
 
     /**
      * Connect to a node via SSH.
+     *
+     * @codeCoverageIgnore Thin wrapper around phpseclib SSH2 — requires real network connection to test.
      */
     public function connect(Node $node, int $timeout = 10): SSH2
     {
@@ -49,6 +51,8 @@ class SshService
 
     /**
      * Connect via SFTP to upload/download files.
+     *
+     * @codeCoverageIgnore Thin wrapper around phpseclib SFTP — requires real network connection to test.
      */
     public function connectSftp(Node $node, int $timeout = 10): SFTP
     {
@@ -149,6 +153,8 @@ class SshService
     /**
      * Test SSH connectivity using raw credentials (no Node model needed).
      * Useful during setup wizard before the node is persisted.
+     *
+     * @codeCoverageIgnore Constructs SSH2 internally — requires real network connection to test the success path.
      */
     public function testConnectionDirect(string $host, int $port, string $user, string $privateKeyContent): array
     {

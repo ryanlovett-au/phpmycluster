@@ -3,11 +3,14 @@
 namespace App\Models;
 
 use App\Enums\ClusterStatus;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Cluster extends Model
 {
+    use HasFactory;
+
     protected $guarded = [];
 
     protected $casts = [

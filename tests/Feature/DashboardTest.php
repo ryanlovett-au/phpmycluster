@@ -1,27 +1,49 @@
 <?php
 
-namespace Tests\Feature;
+use App\Livewire\Dashboard;
+use App\Models\Cluster;
+use Illuminate\Support\Facades\Artisan;
+use Livewire\Livewire;
 
-use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
+it('allows an approved user to view the dashboard', function () {
+    $user = createApprovedUser();
 
-class DashboardTest extends TestCase
-{
-    use RefreshDatabase;
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk();
+});
 
-    public function test_guests_are_redirected_to_the_login_page(): void
-    {
-        $response = $this->get(route('dashboard'));
-        $response->assertRedirect(route('login'));
-    }
+it('redirects an unapproved user away from the dashboard', function () {
+    $user = createPendingUser();
 
-    public function test_authenticated_users_can_visit_the_dashboard(): void
-    {
-        $user = User::factory()->create();
-        $this->actingAs($user);
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertRedirect(route('approval.pending'));
+});
 
-        $response = $this->get(route('dashboard'));
-        $response->assertOk();
-    }
-}
+it('displays cluster cards on the dashboard', function () {
+    $user = createApprovedUser();
+    $cluster = Cluster::factory()->online()->create(['name' => 'My Test Cluster']);
+
+    Livewire::actingAs($user)
+        ->test(Dashboard::class)
+        ->assertSee('My Test Cluster');
+});
+
+it('dispatches the refresh status command when refreshAll is called', function () {
+    Artisan::shouldReceive('call')
+        ->once()
+        ->with('clusters:refresh-status');
+
+    $user = createApprovedUser();
+
+    Livewire::actingAs($user)
+        ->test(Dashboard::class)
+        ->call('refreshAll')
+        ->assertSet('refreshMessage', 'Refresh jobs dispatched for all active clusters.');
+});
+
+it('redirects guests to the login page', function () {
+    $this->get(route('dashboard'))
+        ->assertRedirect(route('login'));
+});
