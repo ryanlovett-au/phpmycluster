@@ -2,9 +2,9 @@
 
 use App\Jobs\SetupRouterJob;
 use App\Livewire\RouterManager;
-use App\Models\Cluster;
-use App\Models\Node;
-use App\Services\NodeProvisionService;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
+use App\Services\MysqlProvisionService;
 use App\Services\SshService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
@@ -14,7 +14,7 @@ use Livewire\Livewire;
 
 it('renders with cluster data', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create(['name' => 'my-cluster']);
+    $cluster = MysqlCluster::factory()->online()->create(['name' => 'my-cluster']);
 
     Livewire::actingAs($user)
         ->test(RouterManager::class, ['cluster' => $cluster])
@@ -25,8 +25,8 @@ it('renders with cluster data', function () {
 
 it('shows router nodes', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $router = Node::factory()->access()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $router = MysqlNode::factory()->access()->create([
         'cluster_id' => $cluster->id,
         'name' => 'router-node-1',
         'host' => '10.0.0.50',
@@ -40,10 +40,10 @@ it('shows router nodes', function () {
 
 it('renders without errors when no router nodes exist', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
+    $cluster = MysqlCluster::factory()->online()->create();
 
     // No access nodes created — just DB nodes
-    Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     Livewire::actingAs($user)
         ->test(RouterManager::class, ['cluster' => $cluster])
@@ -55,7 +55,7 @@ it('renders without errors when no router nodes exist', function () {
 
 it('has correct default property values', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
+    $cluster = MysqlCluster::factory()->online()->create();
 
     Livewire::actingAs($user)
         ->test(RouterManager::class, ['cluster' => $cluster])
@@ -77,7 +77,7 @@ it('has correct default property values', function () {
 
 it('generates a router SSH key pair', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
+    $cluster = MysqlCluster::factory()->online()->create();
 
     $keyPair = ['private' => 'test-priv', 'public' => 'ssh-ed25519 AAAA test'];
     $mock = Mockery::mock(SshService::class);
@@ -94,7 +94,7 @@ it('generates a router SSH key pair', function () {
 
 it('validates routerHost is required', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
+    $cluster = MysqlCluster::factory()->online()->create();
 
     Livewire::actingAs($user)
         ->test(RouterManager::class, ['cluster' => $cluster])
@@ -106,7 +106,7 @@ it('validates routerHost is required', function () {
 it('creates a router node and dispatches the setup job', function () {
     Queue::fake();
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
+    $cluster = MysqlCluster::factory()->online()->create();
 
     Livewire::actingAs($user)
         ->test(RouterManager::class, ['cluster' => $cluster])
@@ -119,7 +119,7 @@ it('creates a router node and dispatches the setup job', function () {
 
     Queue::assertPushed(SetupRouterJob::class);
 
-    $routerNode = Node::where('host', '10.0.0.20')->first();
+    $routerNode = MysqlNode::where('host', '10.0.0.20')->first();
     expect($routerNode)->not->toBeNull();
     expect($routerNode->role->value)->toBe('access');
     expect($routerNode->name)->toBe('router-10.0.0.20');
@@ -128,7 +128,7 @@ it('creates a router node and dispatches the setup job', function () {
 it('uses custom router name when provided', function () {
     Queue::fake();
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
+    $cluster = MysqlCluster::factory()->online()->create();
 
     Livewire::actingAs($user)
         ->test(RouterManager::class, ['cluster' => $cluster])
@@ -139,7 +139,7 @@ it('uses custom router name when provided', function () {
         ->call('setupRouter')
         ->assertSet('settingUpRouter', true);
 
-    $routerNode = Node::where('host', '10.0.0.20')->first();
+    $routerNode = MysqlNode::where('host', '10.0.0.20')->first();
     expect($routerNode->name)->toBe('my-custom-router');
 });
 
@@ -147,7 +147,7 @@ it('uses custom router name when provided', function () {
 
 it('does nothing when no settingUpNodeId is set', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
+    $cluster = MysqlCluster::factory()->online()->create();
 
     Livewire::actingAs($user)
         ->test(RouterManager::class, ['cluster' => $cluster])
@@ -157,8 +157,8 @@ it('does nothing when no settingUpNodeId is set', function () {
 
 it('updates steps from cache during router setup', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->access()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->access()->create(['cluster_id' => $cluster->id]);
 
     $steps = [
         ['message' => 'Installing MySQL Router...', 'status' => 'running', 'time' => '12:00:00'],
@@ -179,8 +179,8 @@ it('updates steps from cache during router setup', function () {
 
 it('marks setup complete when cache says complete', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->access()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->access()->create(['cluster_id' => $cluster->id]);
 
     Cache::put(SetupRouterJob::progressKey($node->id), [
         'steps' => [['message' => 'Router setup done', 'status' => 'success', 'time' => '12:01:00']],
@@ -198,8 +198,8 @@ it('marks setup complete when cache says complete', function () {
 
 it('stops setup on failure', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->access()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->access()->create(['cluster_id' => $cluster->id]);
 
     Cache::put(SetupRouterJob::progressKey($node->id), [
         'steps' => [['message' => 'Error occurred', 'status' => 'error', 'time' => '12:01:00']],
@@ -220,8 +220,8 @@ it('stops setup on failure', function () {
 it('retries setting up a failed router', function () {
     Queue::fake();
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->access()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->access()->create([
         'cluster_id' => $cluster->id,
         'status' => 'error',
         'name' => 'failed-router',
@@ -241,7 +241,7 @@ it('retries setting up a failed router', function () {
 
 it('dismisses setup progress panel', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
+    $cluster = MysqlCluster::factory()->online()->create();
 
     Livewire::actingAs($user)
         ->test(RouterManager::class, ['cluster' => $cluster])
@@ -258,8 +258,8 @@ it('dismisses setup progress panel', function () {
 
 it('deletes an offline router node', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $router = Node::factory()->access()->offline()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $router = MysqlNode::factory()->access()->offline()->create([
         'cluster_id' => $cluster->id,
         'name' => 'dead-router',
     ]);
@@ -269,13 +269,13 @@ it('deletes an offline router node', function () {
         ->call('deleteRouter', $router->id)
         ->assertSet('actionStatus', 'success');
 
-    expect(Node::find($router->id))->toBeNull();
+    expect(MysqlNode::find($router->id))->toBeNull();
 });
 
 it('refuses to delete an online router', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $router = Node::factory()->access()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $router = MysqlNode::factory()->access()->create([
         'cluster_id' => $cluster->id,
         'name' => 'active-router',
         'status' => 'online',
@@ -286,23 +286,23 @@ it('refuses to delete an online router', function () {
         ->call('deleteRouter', $router->id)
         ->assertSet('actionStatus', 'error');
 
-    expect(Node::find($router->id))->not->toBeNull();
+    expect(MysqlNode::find($router->id))->not->toBeNull();
 });
 
 // ─── checkRouterStatus() ───────────────────────────────────────────────────
 
 it('checks router status and marks online', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $router = Node::factory()->access()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $router = MysqlNode::factory()->access()->create([
         'cluster_id' => $cluster->id,
         'status' => 'unknown',
     ]);
 
-    $mock = Mockery::mock(NodeProvisionService::class);
+    $mock = Mockery::mock(MysqlProvisionService::class);
     $mock->shouldReceive('getRouterStatus')
         ->andReturn(['running' => true]);
-    app()->instance(NodeProvisionService::class, $mock);
+    app()->instance(MysqlProvisionService::class, $mock);
 
     Livewire::actingAs($user)
         ->test(RouterManager::class, ['cluster' => $cluster])
@@ -314,16 +314,16 @@ it('checks router status and marks online', function () {
 
 it('checks router status and marks offline', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $router = Node::factory()->access()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $router = MysqlNode::factory()->access()->create([
         'cluster_id' => $cluster->id,
         'status' => 'online',
     ]);
 
-    $mock = Mockery::mock(NodeProvisionService::class);
+    $mock = Mockery::mock(MysqlProvisionService::class);
     $mock->shouldReceive('getRouterStatus')
         ->andReturn(['running' => false]);
-    app()->instance(NodeProvisionService::class, $mock);
+    app()->instance(MysqlProvisionService::class, $mock);
 
     Livewire::actingAs($user)
         ->test(RouterManager::class, ['cluster' => $cluster])
@@ -337,8 +337,8 @@ it('checks router status and marks offline', function () {
 
 it('starts renaming a router node', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $router = Node::factory()->access()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $router = MysqlNode::factory()->access()->create([
         'cluster_id' => $cluster->id,
         'name' => 'old-router-name',
     ]);
@@ -352,8 +352,8 @@ it('starts renaming a router node', function () {
 
 it('saves a renamed router node', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $router = Node::factory()->access()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $router = MysqlNode::factory()->access()->create([
         'cluster_id' => $cluster->id,
         'name' => 'old-router-name',
     ]);
@@ -371,8 +371,8 @@ it('saves a renamed router node', function () {
 
 it('cancels renaming a router node', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $router = Node::factory()->access()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $router = MysqlNode::factory()->access()->create(['cluster_id' => $cluster->id]);
 
     Livewire::actingAs($user)
         ->test(RouterManager::class, ['cluster' => $cluster])
@@ -385,7 +385,7 @@ it('cancels renaming a router node', function () {
 
 it('does nothing when saving rename without a renaming node', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
+    $cluster = MysqlCluster::factory()->online()->create();
 
     Livewire::actingAs($user)
         ->test(RouterManager::class, ['cluster' => $cluster])
@@ -395,8 +395,8 @@ it('does nothing when saving rename without a renaming node', function () {
 
 it('validates rename value is required', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $router = Node::factory()->access()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $router = MysqlNode::factory()->access()->create(['cluster_id' => $cluster->id]);
 
     Livewire::actingAs($user)
         ->test(RouterManager::class, ['cluster' => $cluster])
@@ -413,7 +413,7 @@ it('validates rename value is required', function () {
 it('sets up a router with generated key pair', function () {
     Queue::fake();
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
+    $cluster = MysqlCluster::factory()->online()->create();
 
     Livewire::actingAs($user)
         ->test(RouterManager::class, ['cluster' => $cluster])
@@ -426,21 +426,21 @@ it('sets up a router with generated key pair', function () {
 
     Queue::assertPushed(SetupRouterJob::class);
 
-    $routerNode = Node::where('host', '10.0.0.30')->first();
+    $routerNode = MysqlNode::where('host', '10.0.0.30')->first();
     expect($routerNode)->not->toBeNull();
     expect($routerNode->ssh_public_key)->toBe('gen-router-pub');
 });
 
 // Note: The catch block in setupRouter() (line 109-110) is defensive error handling
-// that wraps Node::create + dispatch. It's excluded via @codeCoverageIgnore in source
+// that wraps MysqlNode::create + dispatch. It's excluded via @codeCoverageIgnore in source
 // since triggering it requires mocking the Eloquent create method or job dispatch.
 
 // ─── pollSetup() — no cache ──────────────────────────────────────────────
 
 it('returns early from pollSetup when settingUpNodeId is set but no cache', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->access()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->access()->create(['cluster_id' => $cluster->id]);
 
     // Set settingUpNodeId but don't populate cache
     Livewire::actingAs($user)
@@ -456,9 +456,9 @@ it('returns early from pollSetup when settingUpNodeId is set but no cache', func
 
 it('displays multiple router nodes', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    Node::factory()->access()->create(['cluster_id' => $cluster->id, 'name' => 'router-a']);
-    Node::factory()->access()->create(['cluster_id' => $cluster->id, 'name' => 'router-b']);
+    $cluster = MysqlCluster::factory()->online()->create();
+    MysqlNode::factory()->access()->create(['cluster_id' => $cluster->id, 'name' => 'router-a']);
+    MysqlNode::factory()->access()->create(['cluster_id' => $cluster->id, 'name' => 'router-b']);
 
     Livewire::actingAs($user)
         ->test(RouterManager::class, ['cluster' => $cluster])

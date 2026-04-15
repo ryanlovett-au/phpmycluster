@@ -2,16 +2,25 @@
 
 namespace App\Models;
 
-use App\Enums\NodeRole;
-use App\Enums\NodeStatus;
+use App\Enums\MysqlNodeRole;
+use App\Enums\MysqlNodeStatus;
+use Database\Factories\MysqlNodeFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Node extends Model
+class MysqlNode extends Model
 {
+    /** @use HasFactory<MysqlNodeFactory> */
     use HasFactory;
+
+    protected static function newFactory(): MysqlNodeFactory
+    {
+        return MysqlNodeFactory::new();
+    }
+
+    protected $table = 'nodes';
 
     protected $fillable = [
         'cluster_id',
@@ -45,8 +54,8 @@ class Node extends Model
     ];
 
     protected $casts = [
-        'role' => NodeRole::class,
-        'status' => NodeStatus::class,
+        'role' => MysqlNodeRole::class,
+        'status' => MysqlNodeStatus::class,
         'last_health_json' => 'array',
         'last_checked_at' => 'datetime',
         'mysql_installed' => 'boolean',
@@ -59,22 +68,22 @@ class Node extends Model
 
     public function cluster(): BelongsTo
     {
-        return $this->belongsTo(Cluster::class);
+        return $this->belongsTo(MysqlCluster::class, 'cluster_id');
     }
 
     public function auditLogs(): HasMany
     {
-        return $this->hasMany(AuditLog::class);
+        return $this->hasMany(AuditLog::class, 'node_id');
     }
 
     public function isDbNode(): bool
     {
-        return in_array($this->role, [NodeRole::Primary, NodeRole::Secondary, NodeRole::Pending]);
+        return in_array($this->role, [MysqlNodeRole::Primary, MysqlNodeRole::Secondary, MysqlNodeRole::Pending]);
     }
 
     public function isAccessNode(): bool
     {
-        return $this->role === NodeRole::Access;
+        return $this->role === MysqlNodeRole::Access;
     }
 
     /**

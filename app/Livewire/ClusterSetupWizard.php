@@ -3,8 +3,8 @@
 namespace App\Livewire;
 
 use App\Jobs\ProvisionClusterJob;
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
 use App\Services\SshService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -72,7 +72,7 @@ class ClusterSetupWizard extends Component
 
     public ?array $clusterStatus = null;
 
-    public function mount(?Cluster $cluster = null): void
+    public function mount(?MysqlCluster $cluster = null): void
     {
         if ($cluster && $cluster->exists) {
             $this->isReprovision = true;
@@ -237,7 +237,7 @@ class ClusterSetupWizard extends Component
 
         if ($this->isReprovision && $this->clusterId) {
             // Re-provisioning: update existing records
-            $cluster = Cluster::findOrFail($this->clusterId);
+            $cluster = MysqlCluster::findOrFail($this->clusterId);
             $cluster->update(['status' => 'pending']);
 
             $node = $cluster->nodes()->first();
@@ -269,7 +269,7 @@ class ClusterSetupWizard extends Component
             $node->update($updateData);
         } else {
             // New cluster: create records
-            $cluster = Cluster::create([
+            $cluster = MysqlCluster::create([
                 'name' => $this->clusterName,
                 'communication_stack' => $this->communicationStack,
                 'cluster_admin_user' => $this->clusterAdminUser,
@@ -278,7 +278,7 @@ class ClusterSetupWizard extends Component
             ]);
             $this->clusterId = $cluster->id;
 
-            $node = Node::create([
+            $node = MysqlNode::create([
                 'cluster_id' => $cluster->id,
                 'name' => $this->seedName ?: "node-1-{$this->seedHost}",
                 'host' => $this->seedHost,

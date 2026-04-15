@@ -24,7 +24,7 @@ class SecurityAudit extends Command
      */
     protected array $false_positives = [
         // SSH commands that are safely constructed (no user input in command string)
-        ['Command Injection', 'NodeProvisionService.php', 'Shell command built with string concatenation', 'Commands use server-side config values only, not user input.'],
+        ['Command Injection', 'MysqlProvisionService.php', 'Shell command built with string concatenation', 'Commands use server-side config values only, not user input.'],
         ['Command Injection', 'FirewallService.php', 'Shell command built with string concatenation', 'UFW commands use validated IP addresses only.'],
 
         // SecurityAudit.php self-referencing: regex patterns contain shell function names as detection strings

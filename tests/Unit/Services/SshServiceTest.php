@@ -1,8 +1,8 @@
 <?php
 
 use App\Models\AuditLog;
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
 use App\Services\SshService;
 use phpseclib3\Net\SFTP;
 use phpseclib3\Net\SSH2;
@@ -56,8 +56,8 @@ it('sanitises AdminPassword from commands', function () {
 });
 
 it('connects to a node via mocked SSH2', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.1',
         'ssh_port' => 22,
@@ -75,8 +75,8 @@ it('connects to a node via mocked SSH2', function () {
 });
 
 it('executes a command and returns output array', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
@@ -102,8 +102,8 @@ it('executes a command and returns output array', function () {
 });
 
 it('records failed commands in audit log', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
@@ -124,8 +124,8 @@ it('records failed commands in audit log', function () {
 });
 
 it('handles SSH connection exceptions gracefully', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
@@ -142,8 +142,8 @@ it('handles SSH connection exceptions gracefully', function () {
 });
 
 it('prepends sudo when sudo flag is true', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
@@ -168,8 +168,8 @@ it('prepends sudo when sudo flag is true', function () {
 // --- New tests for uncovered methods ---
 
 it('testConnection returns success with hostname and os', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
@@ -194,8 +194,8 @@ it('testConnection returns success with hostname and os', function () {
 });
 
 it('testConnection returns failure on exception', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
@@ -222,14 +222,14 @@ it('testConnectionDirect returns failure when private key is invalid', function 
 });
 
 it('testNodeConnectivity returns port open status', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $source = Node::factory()->primary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.1']);
-    $target = Node::factory()->secondary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.2']);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $source = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.1']);
+    $target = MysqlNode::factory()->secondary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.2']);
 
     $service = Mockery::mock(SshService::class)->makePartial();
     $service->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $cmd, string $action) use ($source) {
+        ->withArgs(function (MysqlNode $n, string $cmd, string $action) use ($source) {
             return $n->id === $source->id
                 && str_contains($cmd, '/dev/tcp/10.0.0.2/3306')
                 && $action === 'connectivity.test';
@@ -249,9 +249,9 @@ it('testNodeConnectivity returns port open status', function () {
 });
 
 it('testNodeConnectivity returns port closed status', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $source = Node::factory()->primary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.1']);
-    $target = Node::factory()->secondary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.2']);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $source = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.1']);
+    $target = MysqlNode::factory()->secondary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.2']);
 
     $service = Mockery::mock(SshService::class)->makePartial();
     $service->shouldReceive('exec')
@@ -269,8 +269,8 @@ it('testNodeConnectivity returns port closed status', function () {
 });
 
 it('uploadFile calls connectSftp and puts content', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sftpMock = Mockery::mock(SFTP::class);
     $sftpMock->shouldReceive('put')
@@ -287,8 +287,8 @@ it('uploadFile calls connectSftp and puts content', function () {
 });
 
 it('uploadFile returns false when sftp put fails', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sftpMock = Mockery::mock(SFTP::class);
     $sftpMock->shouldReceive('put')
@@ -305,8 +305,8 @@ it('uploadFile returns false when sftp put fails', function () {
 });
 
 it('connectSftp returns SFTP instance via mocked partial', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sftpMock = Mockery::mock(SFTP::class);
 
@@ -319,8 +319,8 @@ it('connectSftp returns SFTP instance via mocked partial', function () {
 });
 
 it('exec records duration in audit log', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SSH2::class);
     $sshMock->shouldReceive('setTimeout')->once();
@@ -339,8 +339,8 @@ it('exec records duration in audit log', function () {
 });
 
 it('exec stores sanitised command in audit log', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SSH2::class);
     $sshMock->shouldReceive('setTimeout')->once();
@@ -358,8 +358,8 @@ it('exec stores sanitised command in audit log', function () {
 });
 
 it('exec records error message in audit log on exception', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $service = Mockery::mock(SshService::class)->makePartial();
     $service->shouldReceive('connect')->andThrow(new RuntimeException('Host key mismatch'));
@@ -373,8 +373,8 @@ it('exec records error message in audit log on exception', function () {
 });
 
 it('exec records exit code error message for non-zero exit', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SSH2::class);
     $sshMock->shouldReceive('setTimeout')->once();

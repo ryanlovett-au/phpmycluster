@@ -1,14 +1,14 @@
 <?php
 
 use App\Livewire\ClusterManager;
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
 use Illuminate\Support\Facades\Bus;
 use Livewire\Livewire;
 
 it('allows an approved user to view the cluster manager page', function () {
     $user = createApprovedUser();
-    $cluster = Cluster::factory()->online()->create();
+    $cluster = MysqlCluster::factory()->online()->create();
 
     $this->actingAs($user)
         ->get(route('cluster.manage', $cluster))
@@ -17,7 +17,7 @@ it('allows an approved user to view the cluster manager page', function () {
 
 it('redirects an unapproved user away from the cluster manager', function () {
     $user = createPendingUser();
-    $cluster = Cluster::factory()->online()->create();
+    $cluster = MysqlCluster::factory()->online()->create();
 
     $this->actingAs($user)
         ->get(route('cluster.manage', $cluster))
@@ -26,7 +26,7 @@ it('redirects an unapproved user away from the cluster manager', function () {
 
 it('renders the cluster name', function () {
     $user = createApprovedUser();
-    $cluster = Cluster::factory()->online()->create(['name' => 'my-production-cluster']);
+    $cluster = MysqlCluster::factory()->online()->create(['name' => 'my-production-cluster']);
 
     Livewire::actingAs($user)
         ->test(ClusterManager::class, ['cluster' => $cluster])
@@ -35,12 +35,12 @@ it('renders the cluster name', function () {
 
 it('shows DB nodes (non-access role)', function () {
     $user = createApprovedUser();
-    $cluster = Cluster::factory()->online()->create();
-    $primary = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $primary = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'name' => 'db-primary-node',
     ]);
-    $secondary = Node::factory()->secondary()->create([
+    $secondary = MysqlNode::factory()->secondary()->create([
         'cluster_id' => $cluster->id,
         'name' => 'db-secondary-node',
     ]);
@@ -53,8 +53,8 @@ it('shows DB nodes (non-access role)', function () {
 
 it('shows router nodes (access role)', function () {
     $user = createApprovedUser();
-    $cluster = Cluster::factory()->online()->create();
-    $router = Node::factory()->access()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $router = MysqlNode::factory()->access()->create([
         'cluster_id' => $cluster->id,
         'name' => 'router-node-1',
     ]);
@@ -68,8 +68,8 @@ it('dispatches a bus batch when refreshStatus is called', function () {
     Bus::fake();
 
     $user = createApprovedUser();
-    $cluster = Cluster::factory()->online()->create();
-    Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     Livewire::actingAs($user)
         ->test(ClusterManager::class, ['cluster' => $cluster])
@@ -80,8 +80,8 @@ it('dispatches a bus batch when refreshStatus is called', function () {
 
 it('sets renamingNodeId when startRename is called', function () {
     $user = createApprovedUser();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'name' => 'original-name',
     ]);
@@ -95,8 +95,8 @@ it('sets renamingNodeId when startRename is called', function () {
 
 it('updates the node name when saveRename is called', function () {
     $user = createApprovedUser();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'name' => 'old-name',
     ]);
@@ -112,8 +112,8 @@ it('updates the node name when saveRename is called', function () {
 
 it('clears renamingNodeId when cancelRename is called', function () {
     $user = createApprovedUser();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     Livewire::actingAs($user)
         ->test(ClusterManager::class, ['cluster' => $cluster])
@@ -125,26 +125,26 @@ it('clears renamingNodeId when cancelRename is called', function () {
 
 it('deletes the cluster and redirects to dashboard', function () {
     $user = createApprovedUser();
-    $cluster = Cluster::factory()->online()->create();
-    Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     Livewire::actingAs($user)
         ->test(ClusterManager::class, ['cluster' => $cluster])
         ->call('deleteCluster')
         ->assertRedirect(route('dashboard'));
 
-    expect(Cluster::find($cluster->id))->toBeNull();
+    expect(MysqlCluster::find($cluster->id))->toBeNull();
 });
 
 it('splits nodes into DB nodes and router nodes in render', function () {
     $user = createApprovedUser();
-    $cluster = Cluster::factory()->online()->create();
+    $cluster = MysqlCluster::factory()->online()->create();
 
-    $primary = Node::factory()->primary()->create([
+    $primary = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'name' => 'db-node',
     ]);
-    $router = Node::factory()->access()->create([
+    $router = MysqlNode::factory()->access()->create([
         'cluster_id' => $cluster->id,
         'name' => 'router-node',
     ]);

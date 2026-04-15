@@ -1,17 +1,17 @@
 <?php
 
 use App\Jobs\RefreshUserListJob;
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
 use App\Services\MysqlShellService;
 use Illuminate\Support\Facades\Cache;
 
 it('caches users and databases from listUsers and listDatabases', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
-    $primaryNode = Node::factory()->primary()->create([
+    $primaryNode = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
@@ -26,7 +26,7 @@ it('caches users and databases from listUsers and listDatabases', function () {
 
     $mysqlShellMock->shouldReceive('listUsers')
         ->once()
-        ->withArgs(function (Node $node, string $password) use ($primaryNode) {
+        ->withArgs(function (MysqlNode $node, string $password) use ($primaryNode) {
             return $node->id === $primaryNode->id;
         })
         ->andReturn([
@@ -38,7 +38,7 @@ it('caches users and databases from listUsers and listDatabases', function () {
 
     $mysqlShellMock->shouldReceive('listDatabases')
         ->once()
-        ->withArgs(function (Node $node, string $password) use ($primaryNode) {
+        ->withArgs(function (MysqlNode $node, string $password) use ($primaryNode) {
             return $node->id === $primaryNode->id;
         })
         ->andReturn([
@@ -56,12 +56,12 @@ it('caches users and databases from listUsers and listDatabases', function () {
 });
 
 it('skips when cluster has no primary node', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
     // Only secondary, no primary
-    Node::factory()->secondary()->create([
+    MysqlNode::factory()->secondary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
@@ -74,11 +74,11 @@ it('skips when cluster has no primary node', function () {
 });
 
 it('does not cache when listUsers returns error', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
-    $primaryNode = Node::factory()->primary()->create([
+    $primaryNode = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
@@ -110,11 +110,11 @@ it('does not cache when listUsers returns error', function () {
 });
 
 it('handles exceptions gracefully without crashing', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
-    $primaryNode = Node::factory()->primary()->create([
+    $primaryNode = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 

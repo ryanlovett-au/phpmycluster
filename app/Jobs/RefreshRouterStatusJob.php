@@ -2,8 +2,8 @@
 
 namespace App\Jobs;
 
-use App\Models\Node;
-use App\Services\NodeProvisionService;
+use App\Models\MysqlNode;
+use App\Services\MysqlProvisionService;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -21,10 +21,10 @@ class RefreshRouterStatusJob implements ShouldQueue
     public int $tries = 1;
 
     public function __construct(
-        public Node $node,
+        public MysqlNode $node,
     ) {}
 
-    public function handle(NodeProvisionService $provisionService): void
+    public function handle(MysqlProvisionService $provisionService): void
     {
         if ($this->batch()?->cancelled()) {
             return;

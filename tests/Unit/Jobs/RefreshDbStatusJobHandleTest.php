@@ -1,25 +1,25 @@
 <?php
 
 use App\Jobs\RefreshDbStatusJob;
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
 use App\Services\MysqlShellService;
 use Illuminate\Bus\Batch;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 it('updates cluster and node statuses from cluster status response', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
-    $primaryNode = Node::factory()->primary()->create([
+    $primaryNode = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.1',
         'mysql_port' => 3306,
     ]);
 
-    $secondaryNode = Node::factory()->secondary()->create([
+    $secondaryNode = MysqlNode::factory()->secondary()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.2',
         'mysql_port' => 3306,
@@ -47,7 +47,7 @@ it('updates cluster and node statuses from cluster status response', function ()
     $mysqlShellMock = Mockery::mock(MysqlShellService::class);
     $mysqlShellMock->shouldReceive('getClusterStatus')
         ->once()
-        ->withArgs(function (Node $node, string $password) use ($primaryNode) {
+        ->withArgs(function (MysqlNode $node, string $password) use ($primaryNode) {
             return $node->id === $primaryNode->id;
         })
         ->andReturn([
@@ -81,17 +81,17 @@ it('updates cluster and node statuses from cluster status response', function ()
 });
 
 it('marks nodes as error when member status is not ONLINE', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
-    $primaryNode = Node::factory()->primary()->create([
+    $primaryNode = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.1',
         'mysql_port' => 3306,
     ]);
 
-    $secondaryNode = Node::factory()->secondary()->create([
+    $secondaryNode = MysqlNode::factory()->secondary()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.2',
         'mysql_port' => 3306,
@@ -135,11 +135,11 @@ it('marks nodes as error when member status is not ONLINE', function () {
 });
 
 it('marks recovering nodes correctly', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
-    $primaryNode = Node::factory()->primary()->create([
+    $primaryNode = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.1',
         'mysql_port' => 3306,
@@ -176,17 +176,17 @@ it('marks recovering nodes correctly', function () {
 });
 
 it('tries secondary nodes when primary fails', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
-    $primaryNode = Node::factory()->primary()->create([
+    $primaryNode = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.1',
         'mysql_port' => 3306,
     ]);
 
-    $secondaryNode = Node::factory()->secondary()->create([
+    $secondaryNode = MysqlNode::factory()->secondary()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.2',
         'mysql_port' => 3306,
@@ -214,7 +214,7 @@ it('tries secondary nodes when primary fails', function () {
     // First call (primary) fails
     $mysqlShellMock->shouldReceive('getClusterStatus')
         ->once()
-        ->withArgs(function (Node $node) use ($primaryNode) {
+        ->withArgs(function (MysqlNode $node) use ($primaryNode) {
             return $node->id === $primaryNode->id;
         })
         ->andReturn([
@@ -227,7 +227,7 @@ it('tries secondary nodes when primary fails', function () {
     // Second call (secondary) succeeds
     $mysqlShellMock->shouldReceive('getClusterStatus')
         ->once()
-        ->withArgs(function (Node $node) use ($secondaryNode) {
+        ->withArgs(function (MysqlNode $node) use ($secondaryNode) {
             return $node->id === $secondaryNode->id;
         })
         ->andReturn([
@@ -245,11 +245,11 @@ it('tries secondary nodes when primary fails', function () {
 });
 
 it('returns early when batch is cancelled', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
-    Node::factory()->primary()->create([
+    MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.1',
     ]);
@@ -269,11 +269,11 @@ it('returns early when batch is cancelled', function () {
 });
 
 it('sets cluster status to degraded for NO_QUORUM', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
-    $primaryNode = Node::factory()->primary()->create([
+    $primaryNode = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.1',
         'mysql_port' => 3306,
@@ -310,11 +310,11 @@ it('sets cluster status to degraded for NO_QUORUM', function () {
 });
 
 it('sets cluster status to offline for OFFLINE replica set status', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
-    $primaryNode = Node::factory()->primary()->create([
+    $primaryNode = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.1',
         'mysql_port' => 3306,
@@ -351,11 +351,11 @@ it('sets cluster status to offline for OFFLINE replica set status', function () 
 });
 
 it('logs warning when all nodes fail and captures last error from exception', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
-    $primaryNode = Node::factory()->primary()->create([
+    $primaryNode = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.1',
         'mysql_port' => 3306,
@@ -379,11 +379,11 @@ it('logs warning when all nodes fail and captures last error from exception', fu
 });
 
 it('captures last error from failed result data', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
-    $primaryNode = Node::factory()->primary()->create([
+    $primaryNode = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.1',
         'mysql_port' => 3306,
@@ -410,12 +410,12 @@ it('captures last error from failed result data', function () {
 });
 
 it('skips execution when cluster has no db nodes', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
     // Only create an access node, no db nodes
-    Node::factory()->access()->create([
+    MysqlNode::factory()->access()->create([
         'cluster_id' => $cluster->id,
     ]);
 

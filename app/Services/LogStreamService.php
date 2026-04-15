@@ -2,7 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\Node;
+use App\Models\MysqlNode;
 
 /**
  * Stream MySQL error logs and general logs from nodes via SSH.
@@ -16,7 +16,7 @@ class LogStreamService
     /**
      * Get the last N lines of the MySQL error log.
      */
-    public function getErrorLog(Node $node, int $lines = 100): array
+    public function getErrorLog(MysqlNode $node, int $lines = 100): array
     {
         // MySQL error log location varies - check common locations
         $result = $this->ssh->exec(
@@ -41,7 +41,7 @@ class LogStreamService
     /**
      * Get the last N lines of the MySQL slow query log.
      */
-    public function getSlowLog(Node $node, int $lines = 100): array
+    public function getSlowLog(MysqlNode $node, int $lines = 100): array
     {
         $result = $this->ssh->exec(
             $node,
@@ -62,7 +62,7 @@ class LogStreamService
     /**
      * Get the MySQL general log (last N lines).
      */
-    public function getGeneralLog(Node $node, int $lines = 100): array
+    public function getGeneralLog(MysqlNode $node, int $lines = 100): array
     {
         $result = $this->ssh->exec(
             $node,
@@ -83,7 +83,7 @@ class LogStreamService
     /**
      * Get system journal logs for MySQL service.
      */
-    public function getSystemdLog(Node $node, int $lines = 100): array
+    public function getSystemdLog(MysqlNode $node, int $lines = 100): array
     {
         return $this->ssh->exec(
             $node,
@@ -96,7 +96,7 @@ class LogStreamService
     /**
      * Get MySQL Router logs from a node.
      */
-    public function getRouterLog(Node $node, int $lines = 100): array
+    public function getRouterLog(MysqlNode $node, int $lines = 100): array
     {
         return $this->ssh->exec(
             $node,

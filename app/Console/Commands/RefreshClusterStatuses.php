@@ -5,7 +5,7 @@ namespace App\Console\Commands;
 use App\Jobs\RefreshDbStatusJob;
 use App\Jobs\RefreshRouterStatusJob;
 use App\Jobs\RefreshUserListJob;
-use App\Models\Cluster;
+use App\Models\MysqlCluster;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Bus;
 
@@ -17,7 +17,7 @@ class RefreshClusterStatuses extends Command
 
     public function handle(): int
     {
-        $clusters = Cluster::whereIn('status', ['online', 'degraded'])->get();
+        $clusters = MysqlCluster::whereIn('status', ['online', 'degraded'])->get();
 
         if ($clusters->isEmpty()) {
             $this->info('No active clusters to refresh.');

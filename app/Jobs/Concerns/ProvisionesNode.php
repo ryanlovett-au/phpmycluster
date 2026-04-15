@@ -2,10 +2,10 @@
 
 namespace App\Jobs\Concerns;
 
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
+use App\Services\MysqlProvisionService;
 use App\Services\MysqlShellService;
-use App\Services\NodeProvisionService;
 use App\Services\SshService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -30,9 +30,9 @@ trait ProvisionesNode
      * @throws \RuntimeException on any failure
      */
     protected function provisionNode(
-        Cluster $cluster,
-        Node $node,
-        NodeProvisionService $provisionService,
+        MysqlCluster $cluster,
+        MysqlNode $node,
+        MysqlProvisionService $provisionService,
         MysqlShellService $mysqlShell,
         SshService $sshService,
     ): array {
@@ -158,7 +158,7 @@ trait ProvisionesNode
     /**
      * Install MySQL from the official repo with version pinning.
      */
-    protected function installMysql(Cluster $cluster, Node $node, NodeProvisionService $provisionService): void
+    protected function installMysql(MysqlCluster $cluster, MysqlNode $node, MysqlProvisionService $provisionService): void
     {
         $aptConfigVersion = $cluster->mysql_apt_config_version;
         $pinnedMysqlVersion = $cluster->mysql_version;
@@ -199,7 +199,7 @@ trait ProvisionesNode
     /**
      * Probe the remote host to detect what's already provisioned.
      */
-    protected function detectHostState(SshService $sshService, Node $node, Cluster $cluster): array
+    protected function detectHostState(SshService $sshService, MysqlNode $node, MysqlCluster $cluster): array
     {
         $state = [
             'os' => null,

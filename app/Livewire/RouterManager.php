@@ -3,16 +3,16 @@
 namespace App\Livewire;
 
 use App\Jobs\SetupRouterJob;
-use App\Models\Cluster;
-use App\Models\Node;
-use App\Services\NodeProvisionService;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
+use App\Services\MysqlProvisionService;
 use App\Services\SshService;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Component;
 
 class RouterManager extends Component
 {
-    public Cluster $cluster;
+    public MysqlCluster $cluster;
 
     // Add router node form
     public bool $showAddRouter = false;
@@ -52,7 +52,7 @@ class RouterManager extends Component
 
     public string $actionStatus = '';
 
-    public function mount(Cluster $cluster)
+    public function mount(MysqlCluster $cluster)
     {
         $this->cluster = $cluster;
     }
@@ -80,7 +80,7 @@ class RouterManager extends Component
             : '';
 
         try {
-            $node = Node::create([
+            $node = MysqlNode::create([
                 'cluster_id' => $this->cluster->id,
                 'name' => $this->routerName ?: "router-{$this->routerHost}",
                 'host' => $this->routerHost,
@@ -143,7 +143,7 @@ class RouterManager extends Component
      */
     public function retrySetup(int $nodeId): void
     {
-        $node = Node::findOrFail($nodeId);
+        $node = MysqlNode::findOrFail($nodeId);
 
         Cache::forget(SetupRouterJob::progressKey($node->id));
         $node->update(['status' => 'unknown']);
@@ -174,7 +174,7 @@ class RouterManager extends Component
      */
     public function deleteRouter(int $nodeId): void
     {
-        $node = Node::findOrFail($nodeId);
+        $node = MysqlNode::findOrFail($nodeId);
 
         if ($node->status->value === 'online') {
             $this->setMessage('Cannot delete a running router. Stop it first.', 'error');
@@ -195,8 +195,8 @@ class RouterManager extends Component
      */
     public function checkRouterStatus(int $nodeId)
     {
-        $node = Node::findOrFail($nodeId);
-        $result = app(NodeProvisionService::class)->getRouterStatus($node);
+        $node = MysqlNode::findOrFail($nodeId);
+        $result = app(MysqlProvisionService::class)->getRouterStatus($node);
 
         $node->update([
             'status' => $result['running'] ? 'online' : 'offline',
@@ -215,7 +215,7 @@ class RouterManager extends Component
      */
     public function startRename(int $nodeId): void
     {
-        $node = Node::findOrFail($nodeId);
+        $node = MysqlNode::findOrFail($nodeId);
         $this->renamingNodeId = $nodeId;
         $this->renameNodeValue = $node->name;
     }
@@ -233,7 +233,7 @@ class RouterManager extends Component
             'renameNodeValue' => 'required|string|max:255',
         ]);
 
-        $node = Node::findOrFail($this->renamingNodeId);
+        $node = MysqlNode::findOrFail($this->renamingNodeId);
         $node->update(['name' => $this->renameNodeValue]);
 
         $this->renamingNodeId = null;

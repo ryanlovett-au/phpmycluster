@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
 use App\Services\MysqlShellService;
 use App\Services\SshService;
 
@@ -46,8 +46,8 @@ it('returns null when no JSON is found', function () {
 });
 
 it('calls exec with mysqlsh command for getClusterStatus', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'mysql_port' => 3306,
     ]);
@@ -55,7 +55,7 @@ it('calls exec with mysqlsh command for getClusterStatus', function () {
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) use ($node) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) use ($node) {
             return $n->id === $node->id
                 && str_contains($command, 'mysqlsh')
                 && str_contains($command, '--js')
@@ -77,15 +77,15 @@ it('calls exec with mysqlsh command for getClusterStatus', function () {
 });
 
 it('calls exec with correct command for listUsers', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) use ($node) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) use ($node) {
             return $n->id === $node->id
                 && str_contains($command, 'mysqlsh')
                 && str_contains($command, 'mysql.user')
@@ -105,15 +105,15 @@ it('calls exec with correct command for listUsers', function () {
 });
 
 it('calls exec with correct command for createUser', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) use ($node) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) use ($node) {
             return $n->id === $node->id
                 && str_contains($command, 'mysqlsh')
                 && str_contains($command, 'CREATE USER')
@@ -135,15 +135,15 @@ it('calls exec with correct command for createUser', function () {
 });
 
 it('calls exec with correct command for dropUser', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) use ($node) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) use ($node) {
             return $n->id === $node->id
                 && str_contains($command, 'mysqlsh')
                 && str_contains($command, 'DROP USER')
@@ -164,15 +164,15 @@ it('calls exec with correct command for dropUser', function () {
 });
 
 it('calls exec with correct command for listDatabases', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) use ($node) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) use ($node) {
             return $n->id === $node->id
                 && str_contains($command, 'mysqlsh')
                 && str_contains($command, 'SHOW DATABASES')
@@ -192,15 +192,15 @@ it('calls exec with correct command for listDatabases', function () {
 });
 
 it('calls exec with correct command for createDatabase', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) use ($node) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) use ($node) {
             return $n->id === $node->id
                 && str_contains($command, 'mysqlsh')
                 && str_contains($command, 'CREATE DATABASE')
@@ -221,8 +221,8 @@ it('calls exec with correct command for createDatabase', function () {
 });
 
 it('passes password as MYSQLSH_PASSWORD env var in runJs', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'mysql_port' => 3306,
     ]);
@@ -230,7 +230,7 @@ it('passes password as MYSQLSH_PASSWORD env var in runJs', function () {
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command) {
+        ->withArgs(function (MysqlNode $n, string $command) {
             return str_contains($command, 'MYSQLSH_PASSWORD=');
         })
         ->andReturn([
@@ -248,8 +248,8 @@ it('passes password as MYSQLSH_PASSWORD env var in runJs', function () {
 // --- New tests ---
 
 it('runJs returns parsed data from JSON output', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'mysql_port' => 3306,
     ]);
@@ -272,8 +272,8 @@ it('runJs returns parsed data from JSON output', function () {
 });
 
 it('runJs returns null data when no JSON in output', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
@@ -291,13 +291,13 @@ it('runJs returns null data when no JSON in output', function () {
 });
 
 it('runJs omits MYSQLSH_PASSWORD when no password provided', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command) {
+        ->withArgs(function (MysqlNode $n, string $command) {
             return ! str_contains($command, 'MYSQLSH_PASSWORD=');
         })
         ->andReturn([
@@ -313,8 +313,8 @@ it('runJs omits MYSQLSH_PASSWORD when no password provided', function () {
 });
 
 it('checkInstanceConfiguration calls runJs with correct command', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'mysql_port' => 3306,
     ]);
@@ -322,7 +322,7 @@ it('checkInstanceConfiguration calls runJs with correct command', function () {
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return str_contains($command, 'dba.checkInstanceConfiguration')
                 && str_contains($command, 'clusteradmin@localhost:3306')
                 && $action === 'cluster.check_instance';
@@ -341,8 +341,8 @@ it('checkInstanceConfiguration calls runJs with correct command', function () {
 });
 
 it('configureInstance tries socket auth first', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'mysql_port' => 3306,
     ]);
@@ -350,7 +350,7 @@ it('configureInstance tries socket auth first', function () {
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return str_contains($command, 'socket=%2Fvar%2Frun%2Fmysqld%2Fmysqld.sock')
                 && str_contains($command, 'dba.configureInstance')
                 && str_contains($command, 'clusterAdmin')
@@ -370,8 +370,8 @@ it('configureInstance tries socket auth first', function () {
 });
 
 it('configureInstance falls back to TCP on Access denied', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'mysql_port' => 3306,
     ]);
@@ -380,7 +380,7 @@ it('configureInstance falls back to TCP on Access denied', function () {
     // First call: socket auth returns Access denied
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return $action === 'cluster.configure_instance';
         })
         ->andReturn([
@@ -392,7 +392,7 @@ it('configureInstance falls back to TCP on Access denied', function () {
     // Second call: TCP fallback
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return $action === 'cluster.configure_instance_tcp'
                 && str_contains($command, 'root@localhost:3306');
         })
@@ -410,8 +410,8 @@ it('configureInstance falls back to TCP on Access denied', function () {
 });
 
 it('configureInstance does not fall back on non-Access-denied errors', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
@@ -430,11 +430,11 @@ it('configureInstance does not fall back on non-Access-denied errors', function 
 });
 
 it('createCluster uses MYSQL communication stack without ipAllowlist', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'communication_stack' => 'MYSQL',
         'name' => 'test-cluster',
     ]);
-    $node = Node::factory()->primary()->create([
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'mysql_port' => 3306,
     ]);
@@ -442,7 +442,7 @@ it('createCluster uses MYSQL communication stack without ipAllowlist', function 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return str_contains($command, 'communicationStack')
                 && str_contains($command, 'MYSQL')
                 && ! str_contains($command, 'ipAllowlist')
@@ -463,11 +463,11 @@ it('createCluster uses MYSQL communication stack without ipAllowlist', function 
 });
 
 it('createCluster uses XCOM communication stack with ipAllowlist', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'communication_stack' => 'XCOM',
         'name' => 'xcom-cluster',
     ]);
-    $node = Node::factory()->primary()->create([
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'mysql_port' => 3306,
     ]);
@@ -475,7 +475,7 @@ it('createCluster uses XCOM communication stack with ipAllowlist', function () {
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return str_contains($command, 'communicationStack')
                 && str_contains($command, 'XCOM')
                 && str_contains($command, 'ipAllowlist')
@@ -495,14 +495,14 @@ it('createCluster uses XCOM communication stack with ipAllowlist', function () {
 });
 
 it('addInstance uses MYSQL stack without ipAllowlist', function () {
-    $cluster = Cluster::factory()->online()->create(['communication_stack' => 'MYSQL']);
-    $primary = Node::factory()->primary()->create(['cluster_id' => $cluster->id, 'mysql_port' => 3306]);
-    $newNode = Node::factory()->secondary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.2', 'mysql_port' => 3306]);
+    $cluster = MysqlCluster::factory()->online()->create(['communication_stack' => 'MYSQL']);
+    $primary = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id, 'mysql_port' => 3306]);
+    $newNode = MysqlNode::factory()->secondary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.2', 'mysql_port' => 3306]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) use ($primary) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) use ($primary) {
             return $n->id === $primary->id
                 && str_contains($command, 'addInstance')
                 && str_contains($command, '10.0.0.2:3306')
@@ -523,14 +523,14 @@ it('addInstance uses MYSQL stack without ipAllowlist', function () {
 });
 
 it('addInstance uses XCOM stack with ipAllowlist', function () {
-    $cluster = Cluster::factory()->online()->create(['communication_stack' => 'XCOM']);
-    $primary = Node::factory()->primary()->create(['cluster_id' => $cluster->id, 'mysql_port' => 3306]);
-    $newNode = Node::factory()->secondary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.2', 'mysql_port' => 3306]);
+    $cluster = MysqlCluster::factory()->online()->create(['communication_stack' => 'XCOM']);
+    $primary = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id, 'mysql_port' => 3306]);
+    $newNode = MysqlNode::factory()->secondary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.2', 'mysql_port' => 3306]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return str_contains($command, 'ipAllowlist')
                 && $action === 'cluster.add_instance';
         })
@@ -547,14 +547,14 @@ it('addInstance uses XCOM stack with ipAllowlist', function () {
 });
 
 it('removeInstance sends correct command without force', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $primary = Node::factory()->primary()->create(['cluster_id' => $cluster->id, 'mysql_port' => 3306]);
-    $target = Node::factory()->secondary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.3', 'mysql_port' => 3306]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $primary = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id, 'mysql_port' => 3306]);
+    $target = MysqlNode::factory()->secondary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.3', 'mysql_port' => 3306]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) use ($primary) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) use ($primary) {
             return $n->id === $primary->id
                 && str_contains($command, 'c.removeInstance')
                 && str_contains($command, '10.0.0.3:3306')
@@ -575,14 +575,14 @@ it('removeInstance sends correct command without force', function () {
 });
 
 it('removeInstance sends correct command with force', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $primary = Node::factory()->primary()->create(['cluster_id' => $cluster->id, 'mysql_port' => 3306]);
-    $target = Node::factory()->secondary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.3', 'mysql_port' => 3306]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $primary = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id, 'mysql_port' => 3306]);
+    $target = MysqlNode::factory()->secondary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.3', 'mysql_port' => 3306]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return str_contains($command, 'force: true')
                 && $action === 'cluster.remove_instance';
         })
@@ -599,14 +599,14 @@ it('removeInstance sends correct command with force', function () {
 });
 
 it('rejoinInstance sends correct command', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $primary = Node::factory()->primary()->create(['cluster_id' => $cluster->id, 'mysql_port' => 3306]);
-    $target = Node::factory()->secondary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.4', 'mysql_port' => 3306]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $primary = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id, 'mysql_port' => 3306]);
+    $target = MysqlNode::factory()->secondary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.4', 'mysql_port' => 3306]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) use ($primary) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) use ($primary) {
             return $n->id === $primary->id
                 && str_contains($command, 'c.rejoinInstance')
                 && str_contains($command, '10.0.0.4:3306')
@@ -625,8 +625,8 @@ it('rejoinInstance sends correct command', function () {
 });
 
 it('rescanCluster sends correct command', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'mysql_port' => 3306,
     ]);
@@ -634,7 +634,7 @@ it('rescanCluster sends correct command', function () {
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return str_contains($command, 'c.rescan')
                 && str_contains($command, 'interactive: false')
                 && $action === 'cluster.rescan';
@@ -652,8 +652,8 @@ it('rescanCluster sends correct command', function () {
 });
 
 it('forceQuorum sends correct command', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'mysql_port' => 3306,
     ]);
@@ -661,7 +661,7 @@ it('forceQuorum sends correct command', function () {
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return str_contains($command, 'c.forceQuorumUsingPartitionOf')
                 && $action === 'cluster.force_quorum';
         })
@@ -678,8 +678,8 @@ it('forceQuorum sends correct command', function () {
 });
 
 it('rebootCluster sends correct command', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'mysql_port' => 3306,
     ]);
@@ -687,7 +687,7 @@ it('rebootCluster sends correct command', function () {
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return str_contains($command, 'dba.rebootClusterFromCompleteOutage')
                 && $action === 'cluster.reboot';
         })
@@ -704,8 +704,8 @@ it('rebootCluster sends correct command', function () {
 });
 
 it('switchToSinglePrimary sends correct command without target host', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'mysql_port' => 3306,
     ]);
@@ -713,7 +713,7 @@ it('switchToSinglePrimary sends correct command without target host', function (
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return str_contains($command, 'c.switchToSinglePrimaryMode()')
                 && $action === 'cluster.switch_primary';
         })
@@ -730,8 +730,8 @@ it('switchToSinglePrimary sends correct command without target host', function (
 });
 
 it('switchToSinglePrimary sends correct command with target host', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'mysql_port' => 3306,
     ]);
@@ -739,7 +739,7 @@ it('switchToSinglePrimary sends correct command with target host', function () {
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return str_contains($command, 'switchToSinglePrimaryMode')
                 && str_contains($command, '10.0.0.5')
                 && $action === 'cluster.switch_primary';
@@ -757,13 +757,13 @@ it('switchToSinglePrimary sends correct command with target host', function () {
 });
 
 it('getUserGrants sends correct command', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return str_contains($command, 'SHOW GRANTS FOR')
                 && str_contains($command, 'appuser')
                 && $action === 'user.grants';
@@ -782,13 +782,13 @@ it('getUserGrants sends correct command', function () {
 });
 
 it('updateUser updates password only', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return str_contains($command, 'ALTER USER')
                 && str_contains($command, 'newpass')
                 && ! str_contains($command, 'REVOKE')
@@ -807,13 +807,13 @@ it('updateUser updates password only', function () {
 });
 
 it('updateUser updates privileges only', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return ! str_contains($command, 'ALTER USER')
                 && str_contains($command, 'REVOKE ALL PRIVILEGES')
                 && str_contains($command, 'GRANT SELECT')
@@ -832,13 +832,13 @@ it('updateUser updates privileges only', function () {
 });
 
 it('updateUser updates both password and privileges', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return str_contains($command, 'ALTER USER')
                 && str_contains($command, 'REVOKE ALL PRIVILEGES')
                 && str_contains($command, 'GRANT ALL PRIVILEGES')
@@ -857,13 +857,13 @@ it('updateUser updates both password and privileges', function () {
 });
 
 it('createUser scopes to specific database', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return str_contains($command, '`mydb`.*')
                 && str_contains($command, 'SELECT, INSERT')
                 && $action === 'user.create';
@@ -906,8 +906,8 @@ it('extractJson handles JSON embedded in banner output', function () {
 });
 
 it('runJs handles failed ssh exec', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
@@ -1010,8 +1010,8 @@ it('buildDbScope rejects invalid database names', function () {
 })->throws(InvalidArgumentException::class);
 
 it('createUser rejects usernames with injection characters', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $service = new MysqlShellService($sshMock);
@@ -1020,8 +1020,8 @@ it('createUser rejects usernames with injection characters', function () {
 })->throws(InvalidArgumentException::class);
 
 it('dropUser rejects usernames with injection characters', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $service = new MysqlShellService($sshMock);

@@ -1,13 +1,13 @@
 <?php
 
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
 use App\Services\LogStreamService;
 use App\Services\SshService;
 
 it('fetches error log via SSH', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
@@ -16,7 +16,7 @@ it('fetches error log via SSH', function () {
     // First call: find the log path
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return str_contains($command, 'log_error')
                 && $action === 'log.find_error_log';
         })
@@ -29,7 +29,7 @@ it('fetches error log via SSH', function () {
     // Second call: tail the log
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action, bool $sudo) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action, bool $sudo) {
             return str_contains($command, 'tail -n 100')
                 && str_contains($command, '/var/log/mysql/error.log')
                 && $action === 'log.error_log'
@@ -49,8 +49,8 @@ it('fetches error log via SSH', function () {
 });
 
 it('falls back to default error log path when output is stderr', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
@@ -59,7 +59,7 @@ it('falls back to default error log path when output is stderr', function () {
     // First call: find the log path — returns "stderr"
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return str_contains($command, 'log_error')
                 && $action === 'log.find_error_log';
         })
@@ -72,7 +72,7 @@ it('falls back to default error log path when output is stderr', function () {
     // Second call: tail the default fallback path
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action, bool $sudo) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action, bool $sudo) {
             return str_contains($command, '/var/log/mysql/error.log')
                 && $action === 'log.error_log'
                 && $sudo === true;
@@ -91,8 +91,8 @@ it('falls back to default error log path when output is stderr', function () {
 });
 
 it('falls back to default error log path when output is empty', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
@@ -101,7 +101,7 @@ it('falls back to default error log path when output is empty', function () {
     // First call: returns empty string
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return str_contains($command, 'log_error')
                 && $action === 'log.find_error_log';
         })
@@ -114,7 +114,7 @@ it('falls back to default error log path when output is empty', function () {
     // Second call: tail the default fallback path
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action, bool $sudo) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action, bool $sudo) {
             return str_contains($command, '/var/log/mysql/error.log')
                 && $action === 'log.error_log'
                 && $sudo === true;
@@ -132,8 +132,8 @@ it('falls back to default error log path when output is empty', function () {
 });
 
 it('fetches slow query log via SSH', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
@@ -141,7 +141,7 @@ it('fetches slow query log via SSH', function () {
 
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return str_contains($command, 'slow_query_log_file')
                 && $action === 'log.find_slow_log';
         })
@@ -153,7 +153,7 @@ it('fetches slow query log via SSH', function () {
 
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action, bool $sudo) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action, bool $sudo) {
             return str_contains($command, 'tail -n 50')
                 && $action === 'log.slow_log'
                 && $sudo === true;
@@ -171,8 +171,8 @@ it('fetches slow query log via SSH', function () {
 });
 
 it('fetches general log via SSH', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
@@ -180,7 +180,7 @@ it('fetches general log via SSH', function () {
 
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) {
             return str_contains($command, 'general_log_file')
                 && $action === 'log.find_general_log';
         })
@@ -192,7 +192,7 @@ it('fetches general log via SSH', function () {
 
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action, bool $sudo) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action, bool $sudo) {
             return str_contains($command, 'tail')
                 && $action === 'log.general_log'
                 && $sudo === true;
@@ -210,15 +210,15 @@ it('fetches general log via SSH', function () {
 });
 
 it('fetches systemd log for MySQL via SSH', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action, bool $sudo) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action, bool $sudo) {
             return str_contains($command, 'journalctl -u mysql')
                 && str_contains($command, '-n 100')
                 && $action === 'log.systemd'
@@ -237,15 +237,15 @@ it('fetches systemd log for MySQL via SSH', function () {
 });
 
 it('fetches router log via SSH', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->access()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->access()->create([
         'cluster_id' => $cluster->id,
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action, bool $sudo) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action, bool $sudo) {
             return str_contains($command, 'mysqlrouter.log')
                 && $action === 'log.router'
                 && $sudo === true;

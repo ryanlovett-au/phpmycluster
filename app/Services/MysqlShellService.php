@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
 
 /**
  * Wraps MySQL Shell (mysqlsh) AdminAPI commands.
@@ -23,7 +23,7 @@ class MysqlShellService
     /**
      * Run a mysqlsh JavaScript command on a node and return parsed JSON output.
      */
-    public function runJs(Node $node, string $jsCode, string $action, ?string $password = null): array
+    public function runJs(MysqlNode $node, string $jsCode, string $action, ?string $password = null): array
     {
         $escapedJs = str_replace("'", "'\\''", $jsCode);
 
@@ -47,7 +47,7 @@ class MysqlShellService
     /**
      * Check if a node instance is ready for InnoDB Cluster.
      */
-    public function checkInstanceConfiguration(Node $node, string $password): array
+    public function checkInstanceConfiguration(MysqlNode $node, string $password): array
     {
         $uri = "clusteradmin@localhost:{$node->mysql_port}";
 
@@ -60,7 +60,7 @@ print(JSON.stringify(result));
     /**
      * Configure an instance for InnoDB Cluster (creates admin user, sets required vars).
      */
-    public function configureInstance(Node $node, string $rootPassword, string $clusterAdminUser, string $clusterAdminPassword): array
+    public function configureInstance(MysqlNode $node, string $rootPassword, string $clusterAdminUser, string $clusterAdminPassword): array
     {
         // MySQL 8.4 uses auth_socket for root by default — root can only authenticate
         // via Unix socket as the OS root user (no password needed).
@@ -109,7 +109,7 @@ try {
     /**
      * Create a new InnoDB Cluster on the primary node.
      */
-    public function createCluster(Node $primaryNode, Cluster $cluster, string $password): array
+    public function createCluster(MysqlNode $primaryNode, MysqlCluster $cluster, string $password): array
     {
         // ipAllowlist is only valid with XCOM communication stack, not MYSQL
         $options = "communicationStack: '{$cluster->communication_stack}'";
@@ -132,7 +132,7 @@ try {
     /**
      * Get the full cluster status as JSON.
      */
-    public function getClusterStatus(Node $node, string $password): array
+    public function getClusterStatus(MysqlNode $node, string $password): array
     {
         return $this->runJs($node, "
 try {
@@ -149,7 +149,7 @@ try {
     /**
      * Add an instance to the cluster. Run from the PRIMARY node.
      */
-    public function addInstance(Node $primaryNode, Node $newNode, Cluster $cluster, string $password): array
+    public function addInstance(MysqlNode $primaryNode, MysqlNode $newNode, MysqlCluster $cluster, string $password): array
     {
         // ipAllowlist is only valid with XCOM communication stack, not MYSQL
         $options = "recoveryMethod: 'clone'";
@@ -173,7 +173,7 @@ try {
     /**
      * Remove an instance from the cluster.
      */
-    public function removeInstance(Node $primaryNode, Node $targetNode, string $password, bool $force = false): array
+    public function removeInstance(MysqlNode $primaryNode, MysqlNode $targetNode, string $password, bool $force = false): array
     {
         $forceOption = $force ? ', force: true' : '';
 
@@ -192,7 +192,7 @@ try {
     /**
      * Rejoin an instance that has gone offline.
      */
-    public function rejoinInstance(Node $primaryNode, Node $targetNode, string $password): array
+    public function rejoinInstance(MysqlNode $primaryNode, MysqlNode $targetNode, string $password): array
     {
         return $this->runJs($primaryNode, "
 try {
@@ -209,7 +209,7 @@ try {
     /**
      * Rescan the cluster topology (detects unregistered/missing instances).
      */
-    public function rescanCluster(Node $node, string $password): array
+    public function rescanCluster(MysqlNode $node, string $password): array
     {
         return $this->runJs($node, "
 try {
@@ -226,7 +226,7 @@ try {
     /**
      * Force quorum using the given node (when majority is lost).
      */
-    public function forceQuorum(Node $node, string $password): array
+    public function forceQuorum(MysqlNode $node, string $password): array
     {
         return $this->runJs($node, "
 try {
@@ -243,7 +243,7 @@ try {
     /**
      * Reboot a cluster from a complete outage.
      */
-    public function rebootCluster(Node $node, string $password): array
+    public function rebootCluster(MysqlNode $node, string $password): array
     {
         return $this->runJs($node, "
 try {
@@ -259,7 +259,7 @@ try {
     /**
      * Switch a cluster to single-primary or multi-primary mode.
      */
-    public function switchToSinglePrimary(Node $node, string $password, ?string $newPrimaryHost = null): array
+    public function switchToSinglePrimary(MysqlNode $node, string $password, ?string $newPrimaryHost = null): array
     {
         $arg = $newPrimaryHost ? "'clusteradmin@{$newPrimaryHost}'" : '';
 
@@ -279,7 +279,7 @@ try {
      * List MySQL users (excluding system accounts).
      * Connects as root via Unix socket (auth_socket) for full privileges.
      */
-    public function listUsers(Node $node, string $password): array
+    public function listUsers(MysqlNode $node, string $password): array
     {
         $socketUri = 'root@localhost?socket=%2Fvar%2Frun%2Fmysqld%2Fmysqld.sock';
 
@@ -316,7 +316,7 @@ JSEOF, 'user.list');
     /**
      * Get grants for a specific user.
      */
-    public function getUserGrants(Node $node, string $password, string $user, string $host): array
+    public function getUserGrants(MysqlNode $node, string $password, string $user, string $host): array
     {
         $escapedUser = addslashes($user);
         $escapedHost = addslashes($host);
@@ -382,7 +382,7 @@ try {
      * Create a MySQL user with specified privileges.
      * Connects as root via Unix socket for full DDL/GRANT privileges.
      */
-    public function createUser(Node $node, string $password, string $user, string $userPassword, string $host, string $database, string $privileges): array
+    public function createUser(MysqlNode $node, string $password, string $user, string $userPassword, string $host, string $database, string $privileges): array
     {
         $escapedUser = $this->validateIdentifier($user, 'Username');
         $escapedHost = $this->validateIdentifier($host, 'Host');
@@ -406,7 +406,7 @@ try {
     /**
      * Update a MySQL user's password and/or privileges.
      */
-    public function updateUser(Node $node, string $password, string $user, string $host, ?string $newPassword, ?string $database, ?string $privileges): array
+    public function updateUser(MysqlNode $node, string $password, string $user, string $host, ?string $newPassword, ?string $database, ?string $privileges): array
     {
         $escapedUser = $this->validateIdentifier($user, 'Username');
         $escapedHost = $this->validateIdentifier($host, 'Host');
@@ -441,7 +441,7 @@ try {
     /**
      * Drop a MySQL user.
      */
-    public function dropUser(Node $node, string $password, string $user, string $host): array
+    public function dropUser(MysqlNode $node, string $password, string $user, string $host): array
     {
         $escapedUser = $this->validateIdentifier($user, 'Username');
         $escapedHost = $this->validateIdentifier($host, 'Host');
@@ -462,7 +462,7 @@ try {
     /**
      * List databases (excluding system schemas).
      */
-    public function listDatabases(Node $node, string $password): array
+    public function listDatabases(MysqlNode $node, string $password): array
     {
         $socketUri = 'root@localhost?socket=%2Fvar%2Frun%2Fmysqld%2Fmysqld.sock';
 
@@ -486,7 +486,7 @@ try {
     /**
      * Create a database.
      */
-    public function createDatabase(Node $node, string $password, string $database): array
+    public function createDatabase(MysqlNode $node, string $password, string $database): array
     {
         $escapedDb = $this->validateIdentifier($database, 'Database name');
         $socketUri = 'root@localhost?socket=%2Fvar%2Frun%2Fmysqld%2Fmysqld.sock';

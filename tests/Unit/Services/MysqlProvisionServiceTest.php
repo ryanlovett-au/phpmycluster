@@ -1,8 +1,8 @@
 <?php
 
-use App\Models\Cluster;
-use App\Models\Node;
-use App\Services\NodeProvisionService;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
+use App\Services\MysqlProvisionService;
 use App\Services\SshService;
 use Illuminate\Support\Facades\Http;
 
@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Http;
 
 it('returns correct apt config URL format', function () {
     $sshMock = Mockery::mock(SshService::class);
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
 
     $url = $service->getAptConfigUrl('0.8.33-1');
 
@@ -19,7 +19,7 @@ it('returns correct apt config URL format', function () {
 
 it('returns correct apt config URL for different versions', function () {
     $sshMock = Mockery::mock(SshService::class);
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
 
     $url = $service->getAptConfigUrl('0.9.0-1');
 
@@ -27,8 +27,8 @@ it('returns correct apt config URL for different versions', function () {
 });
 
 it('detects OS from SSH output', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
@@ -44,7 +44,7 @@ it('detects OS from SSH output', function () {
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) use ($node) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) use ($node) {
             return $n->id === $node->id
                 && str_contains($command, '/etc/os-release')
                 && $action === 'provision.detect_os';
@@ -55,7 +55,7 @@ it('detects OS from SSH output', function () {
             'exit_code' => 0,
         ]);
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $result = $service->detectOs($node);
 
     expect($result)->toBeArray()
@@ -65,15 +65,15 @@ it('detects OS from SSH output', function () {
 });
 
 it('returns router status as running when active', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->access()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->access()->create([
         'cluster_id' => $cluster->id,
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action) use ($node) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action) use ($node) {
             return $n->id === $node->id
                 && str_contains($command, 'systemctl is-active mysqlrouter')
                 && $action === 'router.status';
@@ -84,7 +84,7 @@ it('returns router status as running when active', function () {
             'exit_code' => 0,
         ]);
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $result = $service->getRouterStatus($node);
 
     expect($result['running'])->toBeTrue()
@@ -92,8 +92,8 @@ it('returns router status as running when active', function () {
 });
 
 it('returns router status as not running when inactive', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->access()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->access()->create([
         'cluster_id' => $cluster->id,
     ]);
 
@@ -106,15 +106,15 @@ it('returns router status as not running when inactive', function () {
             'exit_code' => 3,
         ]);
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $result = $service->getRouterStatus($node);
 
     expect($result['running'])->toBeFalse();
 });
 
 it('returns router status as not running when failed', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->access()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->access()->create([
         'cluster_id' => $cluster->id,
     ]);
 
@@ -127,7 +127,7 @@ it('returns router status as not running when failed', function () {
             'exit_code' => 1,
         ]);
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $result = $service->getRouterStatus($node);
 
     expect($result['running'])->toBeFalse();
@@ -136,8 +136,8 @@ it('returns router status as not running when failed', function () {
 // --- New tests ---
 
 it('detectOs handles Debian output', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $osReleaseOutput = implode("\n", [
         'PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"',
@@ -153,7 +153,7 @@ it('detectOs handles Debian output', function () {
         'exit_code' => 0,
     ]);
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $result = $service->detectOs($node);
 
     expect($result['id'])->toBe('debian')
@@ -161,8 +161,8 @@ it('detectOs handles Debian output', function () {
 });
 
 it('detectOs handles empty output', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')->once()->andReturn([
@@ -171,7 +171,7 @@ it('detectOs handles empty output', function () {
         'exit_code' => 0,
     ]);
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $result = $service->detectOs($node);
 
     expect($result)->toBeArray()
@@ -189,7 +189,7 @@ it('resolveLatestAptConfigVersion returns latest version from repo', function ()
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
 
     $version = $service->resolveLatestAptConfigVersion();
 
@@ -202,7 +202,7 @@ it('resolveLatestAptConfigVersion throws on HTTP failure', function () {
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
 
     $service->resolveLatestAptConfigVersion();
 })->throws(RuntimeException::class, 'Failed to fetch MySQL repo index');
@@ -213,7 +213,7 @@ it('resolveLatestAptConfigVersion throws when no packages found', function () {
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
 
     $service->resolveLatestAptConfigVersion();
 })->throws(RuntimeException::class, 'Could not find any mysql-apt-config packages');
@@ -226,8 +226,8 @@ it('installMysql auto-resolves apt config version when not pinned', function () 
         ),
     ]);
 
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')->andReturn([
@@ -237,7 +237,7 @@ it('installMysql auto-resolves apt config version when not pinned', function () 
     ]);
     $sshMock->shouldReceive('uploadFile')->never();
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $result = $service->installMysql($node);
 
     expect($result['apt_config_version'])->toBe('0.8.33-1')
@@ -246,13 +246,13 @@ it('installMysql auto-resolves apt config version when not pinned', function () 
 });
 
 it('installMysql uses pinned apt config version', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $commands = [];
     $sshMock->shouldReceive('exec')
-        ->andReturnUsing(function (Node $n, string $command, string $action) use (&$commands) {
+        ->andReturnUsing(function (MysqlNode $n, string $command, string $action) use (&$commands) {
             $commands[] = ['command' => $command, 'action' => $action];
 
             return [
@@ -262,7 +262,7 @@ it('installMysql uses pinned apt config version', function () {
             ];
         });
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $result = $service->installMysql($node, '0.8.32-1');
 
     expect($result['apt_config_version'])->toBe('0.8.32-1');
@@ -273,13 +273,13 @@ it('installMysql uses pinned apt config version', function () {
 });
 
 it('installMysql uses pinned mysql version for install command', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $commands = [];
     $sshMock->shouldReceive('exec')
-        ->andReturnUsing(function (Node $n, string $command, string $action) use (&$commands) {
+        ->andReturnUsing(function (MysqlNode $n, string $command, string $action) use (&$commands) {
             $commands[] = ['command' => $command, 'action' => $action];
 
             return [
@@ -289,7 +289,7 @@ it('installMysql uses pinned mysql version for install command', function () {
             ];
         });
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $result = $service->installMysql($node, '0.8.33-1', '8.4.0-1ubuntu24.04');
 
     // Should have pinned mysql-server version
@@ -298,8 +298,8 @@ it('installMysql uses pinned mysql version for install command', function () {
 });
 
 it('installMysql updates node model after install', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->create([
         'cluster_id' => $cluster->id,
         'mysql_installed' => false,
         'mysql_shell_installed' => false,
@@ -313,7 +313,7 @@ it('installMysql updates node model after install', function () {
             'exit_code' => 0,
         ]);
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $service->installMysql($node, '0.8.33-1');
 
     $node->refresh();
@@ -322,13 +322,13 @@ it('installMysql updates node model after install', function () {
 });
 
 it('installMysql detects official repo from policy output', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
 
     $callCount = 0;
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
-        ->andReturnUsing(function (Node $n, string $command, string $action) use (&$callCount) {
+        ->andReturnUsing(function (MysqlNode $n, string $command, string $action) use (&$callCount) {
             $callCount++;
             if ($action === 'provision.verify_server_source') {
                 return ['success' => true, 'output' => "mysql-server:\n  Installed: 8.4.0\n  500 https://repo.mysql.com/apt", 'exit_code' => 0];
@@ -340,7 +340,7 @@ it('installMysql detects official repo from policy output', function () {
             return ['success' => true, 'output' => 'mysql  Ver 8.4.0', 'exit_code' => 0];
         });
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $result = $service->installMysql($node, '0.8.33-1');
 
     expect($result['server_from_official_repo'])->toBeTrue()
@@ -348,13 +348,13 @@ it('installMysql detects official repo from policy output', function () {
 });
 
 it('installMysqlRouter installs when repo already present', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->access()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->access()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $commands = [];
     $sshMock->shouldReceive('exec')
-        ->andReturnUsing(function (Node $n, string $command, string $action) use (&$commands) {
+        ->andReturnUsing(function (MysqlNode $n, string $command, string $action) use (&$commands) {
             $commands[] = $action;
             if ($action === 'provision.check_router_repo') {
                 return ['success' => true, 'output' => 'REPO_OK', 'exit_code' => 0];
@@ -366,7 +366,7 @@ it('installMysqlRouter installs when repo already present', function () {
             return ['success' => true, 'output' => 'ok', 'exit_code' => 0];
         });
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $result = $service->installMysqlRouter($node);
 
     expect($result['installed'])->toBeTrue()
@@ -386,13 +386,13 @@ it('installMysqlRouter sets up repo when missing', function () {
         ),
     ]);
 
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->access()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->access()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $commands = [];
     $sshMock->shouldReceive('exec')
-        ->andReturnUsing(function (Node $n, string $command, string $action) use (&$commands) {
+        ->andReturnUsing(function (MysqlNode $n, string $command, string $action) use (&$commands) {
             $commands[] = $action;
             if ($action === 'provision.check_router_repo') {
                 return ['success' => true, 'output' => 'REPO_MISSING', 'exit_code' => 0];
@@ -404,7 +404,7 @@ it('installMysqlRouter sets up repo when missing', function () {
             return ['success' => true, 'output' => 'ok', 'exit_code' => 0];
         });
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $result = $service->installMysqlRouter($node);
 
     expect($result['installed'])->toBeTrue();
@@ -418,13 +418,13 @@ it('installMysqlRouter sets up repo when missing', function () {
 });
 
 it('installMysqlRouter uses provided apt config version', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->access()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->access()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $commands = [];
     $sshMock->shouldReceive('exec')
-        ->andReturnUsing(function (Node $n, string $command, string $action) use (&$commands) {
+        ->andReturnUsing(function (MysqlNode $n, string $command, string $action) use (&$commands) {
             $commands[] = ['command' => $command, 'action' => $action];
             if ($action === 'provision.check_router_repo') {
                 return ['success' => true, 'output' => 'REPO_MISSING', 'exit_code' => 0];
@@ -436,7 +436,7 @@ it('installMysqlRouter uses provided apt config version', function () {
             return ['success' => true, 'output' => 'ok', 'exit_code' => 0];
         });
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $service->installMysqlRouter($node, '0.8.32-1');
 
     $repoCmd = collect($commands)->first(fn ($c) => $c['action'] === 'provision.router_add_repo');
@@ -444,15 +444,15 @@ it('installMysqlRouter uses provided apt config version', function () {
 });
 
 it('installMysqlRouter updates node model', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->create([
         'cluster_id' => $cluster->id,
         'mysql_router_installed' => false,
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
-        ->andReturnUsing(function (Node $n, string $command, string $action) {
+        ->andReturnUsing(function (MysqlNode $n, string $command, string $action) {
             if ($action === 'provision.check_router_repo') {
                 return ['success' => true, 'output' => 'REPO_OK', 'exit_code' => 0];
             }
@@ -463,7 +463,7 @@ it('installMysqlRouter updates node model', function () {
             return ['success' => true, 'output' => 'ok', 'exit_code' => 0];
         });
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $service->installMysqlRouter($node);
 
     $node->refresh();
@@ -471,12 +471,12 @@ it('installMysqlRouter updates node model', function () {
 });
 
 it('installMysqlRouter marks not installed when version check fails', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
-        ->andReturnUsing(function (Node $n, string $command, string $action) {
+        ->andReturnUsing(function (MysqlNode $n, string $command, string $action) {
             if ($action === 'provision.check_router_repo') {
                 return ['success' => true, 'output' => 'REPO_OK', 'exit_code' => 0];
             }
@@ -487,7 +487,7 @@ it('installMysqlRouter marks not installed when version check fails', function (
             return ['success' => true, 'output' => 'ok', 'exit_code' => 0];
         });
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $result = $service->installMysqlRouter($node);
 
     expect($result['installed'])->toBeFalse();
@@ -496,8 +496,8 @@ it('installMysqlRouter marks not installed when version check fails', function (
 });
 
 it('writeMysqlConfig generates correct config with server_id', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.1',
         'mysql_port' => 3306,
@@ -509,7 +509,7 @@ it('writeMysqlConfig generates correct config with server_id', function () {
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('uploadFile')
         ->once()
-        ->withArgs(function (Node $n, string $path, string $content) use (&$uploadedContent) {
+        ->withArgs(function (MysqlNode $n, string $path, string $content) use (&$uploadedContent) {
             $uploadedContent = $content;
 
             return $path === '/tmp/innodb-cluster.cnf';
@@ -523,7 +523,7 @@ it('writeMysqlConfig generates correct config with server_id', function () {
             'exit_code' => 0,
         ]);
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $result = $service->writeMysqlConfig($node);
 
     expect($result['success'])->toBeTrue();
@@ -536,8 +536,8 @@ it('writeMysqlConfig generates correct config with server_id', function () {
 });
 
 it('writeMysqlConfig uses node id when server_id is null', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'server_id' => null,
     ]);
@@ -546,7 +546,7 @@ it('writeMysqlConfig uses node id when server_id is null', function () {
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('uploadFile')
         ->once()
-        ->withArgs(function (Node $n, string $path, string $content) use (&$uploadedContent) {
+        ->withArgs(function (MysqlNode $n, string $path, string $content) use (&$uploadedContent) {
             $uploadedContent = $content;
 
             return true;
@@ -560,15 +560,15 @@ it('writeMysqlConfig uses node id when server_id is null', function () {
             'exit_code' => 0,
         ]);
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $service->writeMysqlConfig($node);
 
     expect($uploadedContent)->toContain("server-id = {$node->id}");
 });
 
 it('writeMysqlConfig updates node on success', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->create([
         'cluster_id' => $cluster->id,
         'mysql_configured' => false,
         'server_id' => 99,
@@ -583,7 +583,7 @@ it('writeMysqlConfig updates node on success', function () {
             'exit_code' => 0,
         ]);
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $service->writeMysqlConfig($node);
 
     $node->refresh();
@@ -592,8 +592,8 @@ it('writeMysqlConfig updates node on success', function () {
 });
 
 it('writeMysqlConfig does not update node on failure', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->create([
         'cluster_id' => $cluster->id,
         'mysql_configured' => false,
     ]);
@@ -603,7 +603,7 @@ it('writeMysqlConfig does not update node on failure', function () {
 
     $callCount = 0;
     $sshMock->shouldReceive('exec')
-        ->andReturnUsing(function (Node $n, string $command, string $action) use (&$callCount) {
+        ->andReturnUsing(function (MysqlNode $n, string $command, string $action) use (&$callCount) {
             $callCount++;
             if ($action === 'provision.detect_confdir') {
                 return ['success' => true, 'output' => '/etc/mysql/conf.d/', 'exit_code' => 0];
@@ -613,7 +613,7 @@ it('writeMysqlConfig does not update node on failure', function () {
             return ['success' => false, 'output' => 'Permission denied', 'exit_code' => 1];
         });
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $service->writeMysqlConfig($node);
 
     $node->refresh();
@@ -621,8 +621,8 @@ it('writeMysqlConfig does not update node on failure', function () {
 });
 
 it('writeMysqlConfig uses fallback conf dir when detection returns empty', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'server_id' => 1,
     ]);
@@ -632,7 +632,7 @@ it('writeMysqlConfig uses fallback conf dir when detection returns empty', funct
 
     $commands = [];
     $sshMock->shouldReceive('exec')
-        ->andReturnUsing(function (Node $n, string $command, string $action) use (&$commands) {
+        ->andReturnUsing(function (MysqlNode $n, string $command, string $action) use (&$commands) {
             $commands[] = ['command' => $command, 'action' => $action];
             if ($action === 'provision.detect_confdir') {
                 return ['success' => true, 'output' => '', 'exit_code' => 0];
@@ -641,7 +641,7 @@ it('writeMysqlConfig uses fallback conf dir when detection returns empty', funct
             return ['success' => true, 'output' => 'ok', 'exit_code' => 0];
         });
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $service->writeMysqlConfig($node);
 
     // Should use the fallback /etc/mysql/conf.d/ directory
@@ -650,13 +650,13 @@ it('writeMysqlConfig uses fallback conf dir when detection returns empty', funct
 });
 
 it('restartMysql calls systemctl restart with sudo', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action, bool $sudo) use ($node) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action, bool $sudo) use ($node) {
             return $n->id === $node->id
                 && str_contains($command, 'systemctl restart mysql')
                 && $action === 'provision.restart_mysql'
@@ -668,15 +668,15 @@ it('restartMysql calls systemctl restart with sudo', function () {
             'exit_code' => 0,
         ]);
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $result = $service->restartMysql($node);
 
     expect($result['success'])->toBeTrue();
 });
 
 it('restartMysql returns failure when systemctl fails', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
@@ -687,7 +687,7 @@ it('restartMysql returns failure when systemctl fails', function () {
             'exit_code' => 1,
         ]);
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $result = $service->restartMysql($node);
 
     expect($result['success'])->toBeFalse()
@@ -695,9 +695,9 @@ it('restartMysql returns failure when systemctl fails', function () {
 });
 
 it('bootstrapRouter runs bootstrap and starts service on success', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $accessNode = Node::factory()->access()->create(['cluster_id' => $cluster->id]);
-    $primaryNode = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $accessNode = MysqlNode::factory()->access()->create(['cluster_id' => $cluster->id]);
+    $primaryNode = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.1',
         'mysql_port' => 3306,
@@ -706,13 +706,13 @@ it('bootstrapRouter runs bootstrap and starts service on success', function () {
     $sshMock = Mockery::mock(SshService::class);
     $actions = [];
     $sshMock->shouldReceive('exec')
-        ->andReturnUsing(function (Node $n, string $command, string $action, bool $sudo = false) use (&$actions) {
+        ->andReturnUsing(function (MysqlNode $n, string $command, string $action, bool $sudo = false) use (&$actions) {
             $actions[] = $action;
 
             return ['success' => true, 'output' => 'ok', 'exit_code' => 0];
         });
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $result = $service->bootstrapRouter($accessNode, $primaryNode, 'clusterpass');
 
     expect($result['success'])->toBeTrue();
@@ -722,9 +722,9 @@ it('bootstrapRouter runs bootstrap and starts service on success', function () {
 });
 
 it('bootstrapRouter does not start service on failure', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $accessNode = Node::factory()->access()->create(['cluster_id' => $cluster->id]);
-    $primaryNode = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $accessNode = MysqlNode::factory()->access()->create(['cluster_id' => $cluster->id]);
+    $primaryNode = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.1',
         'mysql_port' => 3306,
@@ -733,7 +733,7 @@ it('bootstrapRouter does not start service on failure', function () {
     $sshMock = Mockery::mock(SshService::class);
     $actions = [];
     $sshMock->shouldReceive('exec')
-        ->andReturnUsing(function (Node $n, string $command, string $action, bool $sudo = false) use (&$actions) {
+        ->andReturnUsing(function (MysqlNode $n, string $command, string $action, bool $sudo = false) use (&$actions) {
             $actions[] = $action;
             if ($action === 'provision.router_bootstrap') {
                 return ['success' => false, 'output' => 'ERROR: Unable to connect', 'exit_code' => 1];
@@ -742,7 +742,7 @@ it('bootstrapRouter does not start service on failure', function () {
             return ['success' => true, 'output' => 'ok', 'exit_code' => 0];
         });
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $result = $service->bootstrapRouter($accessNode, $primaryNode, 'clusterpass');
 
     expect($result['success'])->toBeFalse();
@@ -750,9 +750,9 @@ it('bootstrapRouter does not start service on failure', function () {
 });
 
 it('bootstrapRouter passes correct bootstrap command with primary host', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $accessNode = Node::factory()->access()->create(['cluster_id' => $cluster->id]);
-    $primaryNode = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $accessNode = MysqlNode::factory()->access()->create(['cluster_id' => $cluster->id]);
+    $primaryNode = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.1',
         'mysql_port' => 3306,
@@ -760,7 +760,7 @@ it('bootstrapRouter passes correct bootstrap command with primary host', functio
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
-        ->andReturnUsing(function (Node $n, string $command, string $action, bool $sudo = false) {
+        ->andReturnUsing(function (MysqlNode $n, string $command, string $action, bool $sudo = false) {
             if ($action === 'provision.router_bootstrap') {
                 expect($command)->toContain('clusteradmin@10.0.0.1:3306')
                     ->and($command)->toContain('--conf-bind-address=0.0.0.0')
@@ -770,13 +770,13 @@ it('bootstrapRouter passes correct bootstrap command with primary host', functio
             return ['success' => true, 'output' => 'ok', 'exit_code' => 0];
         });
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $service->bootstrapRouter($accessNode, $primaryNode, 'clusterpass');
 });
 
 it('getRouterStatus handles empty output', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->access()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->access()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
@@ -787,7 +787,7 @@ it('getRouterStatus handles empty output', function () {
             'exit_code' => 4,
         ]);
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $result = $service->getRouterStatus($node);
 
     expect($result['running'])->toBeFalse()
@@ -797,8 +797,8 @@ it('getRouterStatus handles empty output', function () {
 // --- detectSystemInfo() tests ---
 
 it('detectSystemInfo detects RAM CPU and OS', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
@@ -814,7 +814,7 @@ it('detectSystemInfo detects RAM CPU and OS', function () {
         ->once()
         ->andReturn(['success' => true, 'output' => 'Ubuntu 22.04.3 LTS', 'exit_code' => 0]);
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $result = $service->detectSystemInfo($node);
 
     expect($result['ram_mb'])->toBe(8192)
@@ -828,13 +828,13 @@ it('detectSystemInfo detects RAM CPU and OS', function () {
 });
 
 it('detectSystemInfo handles empty output gracefully', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')->andReturn(['success' => false, 'output' => '', 'exit_code' => 1]);
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $result = $service->detectSystemInfo($node);
 
     expect($result['ram_mb'])->toBe(0)
@@ -846,7 +846,7 @@ it('detectSystemInfo handles empty output gracefully', function () {
 
 it('calculateTuning returns sensible values for 2GB server', function () {
     $sshMock = Mockery::mock(SshService::class);
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
 
     $tuning = $service->calculateTuning(2048, 2);
 
@@ -858,7 +858,7 @@ it('calculateTuning returns sensible values for 2GB server', function () {
 
 it('calculateTuning scales up for 32GB server', function () {
     $sshMock = Mockery::mock(SshService::class);
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
 
     $tuning = $service->calculateTuning(32768, 8);
 
@@ -872,7 +872,7 @@ it('calculateTuning scales up for 32GB server', function () {
 
 it('calculateTuning handles minimum values for 512MB server', function () {
     $sshMock = Mockery::mock(SshService::class);
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
 
     $tuning = $service->calculateTuning(512, 1);
 
@@ -882,8 +882,8 @@ it('calculateTuning handles minimum values for 512MB server', function () {
 });
 
 it('writeMysqlConfig includes tuning section when RAM is known', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'ram_mb' => 8192,
         'cpu_cores' => 4,
@@ -908,7 +908,7 @@ it('writeMysqlConfig includes tuning section when RAM is known', function () {
         ->with($node, Mockery::pattern('/mkdir/'), 'provision.write_config', Mockery::any())
         ->andReturn(['success' => true, 'output' => '', 'exit_code' => 0]);
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $service->writeMysqlConfig($node);
 
     // Verify tuning section is present
@@ -919,8 +919,8 @@ it('writeMysqlConfig includes tuning section when RAM is known', function () {
 });
 
 it('writeMysqlConfig omits tuning section when RAM is unknown', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'ram_mb' => null,
         'cpu_cores' => null,
@@ -939,7 +939,7 @@ it('writeMysqlConfig omits tuning section when RAM is unknown', function () {
         ->andReturn(true);
     $sshMock->shouldReceive('exec')->andReturn(['success' => true, 'output' => '/etc/mysql/conf.d/', 'exit_code' => 0]);
 
-    $service = new NodeProvisionService($sshMock);
+    $service = new MysqlProvisionService($sshMock);
     $service->writeMysqlConfig($node);
 
     expect($uploadedContent)->not->toContain('Performance tuning')

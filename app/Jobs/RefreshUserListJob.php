@@ -2,7 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Models\Cluster;
+use App\Models\MysqlCluster;
 use App\Services\MysqlShellService;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
@@ -22,7 +22,7 @@ class RefreshUserListJob implements ShouldQueue
     public int $tries = 1;
 
     public function __construct(
-        public Cluster $cluster,
+        public MysqlCluster $cluster,
     ) {}
 
     public function handle(MysqlShellService $mysqlShell): void

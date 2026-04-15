@@ -1,27 +1,27 @@
 <?php
 
-use App\Enums\NodeRole;
-use App\Enums\NodeStatus;
+use App\Enums\MysqlNodeRole;
+use App\Enums\MysqlNodeStatus;
 use App\Jobs\SetupRouterJob;
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
 use App\Services\FirewallService;
-use App\Services\NodeProvisionService;
+use App\Services\MysqlProvisionService;
 use App\Services\SshService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 it('has a timeout of 900 seconds', function () {
-    $cluster = Cluster::factory()->create();
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->create();
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
     $job = new SetupRouterJob($cluster, $node);
 
     expect($job->timeout)->toBe(900);
 });
 
 it('has tries set to 1', function () {
-    $cluster = Cluster::factory()->create();
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->create();
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
     $job = new SetupRouterJob($cluster, $node);
 
     expect($job->tries)->toBe(1);
@@ -34,15 +34,15 @@ it('returns the correct progress key format', function () {
 });
 
 it('sets up a router successfully when not already installed', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
         'mysql_apt_config_version' => '0.8.33-1',
     ]);
-    $primary = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
-    $routerNode = Node::factory()->create([
+    $primary = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $routerNode = MysqlNode::factory()->create([
         'cluster_id' => $cluster->id,
-        'role' => NodeRole::Access,
+        'role' => MysqlNodeRole::Access,
     ]);
 
     $job = new SetupRouterJob($cluster, $routerNode, 'any');
@@ -55,7 +55,7 @@ it('sets up a router successfully when not already installed', function () {
     ]);
     $sshService->shouldReceive('exec')->andReturn(['output' => '', 'exit_code' => 0]);
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $provisionService->shouldReceive('getRouterStatus')->once()->andReturn([
         'running' => false,
     ]);
@@ -74,7 +74,7 @@ it('sets up a router successfully when not already installed', function () {
     $job->handle($provisionService, $firewallService, $sshService);
 
     $routerNode->refresh();
-    expect($routerNode->status)->toBe(NodeStatus::Online);
+    expect($routerNode->status)->toBe(MysqlNodeStatus::Online);
     expect($routerNode->mysql_router_installed)->toBeTrue();
 
     $progress = Cache::get(SetupRouterJob::progressKey($routerNode->id));
@@ -82,14 +82,14 @@ it('sets up a router successfully when not already installed', function () {
 });
 
 it('sets up a router successfully when already installed and running', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
     ]);
-    $primary = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
-    $routerNode = Node::factory()->create([
+    $primary = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $routerNode = MysqlNode::factory()->create([
         'cluster_id' => $cluster->id,
-        'role' => NodeRole::Access,
+        'role' => MysqlNodeRole::Access,
     ]);
 
     $job = new SetupRouterJob($cluster, $routerNode);
@@ -102,7 +102,7 @@ it('sets up a router successfully when already installed and running', function 
     ]);
     $sshService->shouldReceive('exec')->andReturn(['output' => '', 'exit_code' => 0]);
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $provisionService->shouldReceive('getRouterStatus')->once()->andReturn([
         'running' => true,
     ]);
@@ -117,7 +117,7 @@ it('sets up a router successfully when already installed and running', function 
     $job->handle($provisionService, $firewallService, $sshService);
 
     $routerNode->refresh();
-    expect($routerNode->status)->toBe(NodeStatus::Online);
+    expect($routerNode->status)->toBe(MysqlNodeStatus::Online);
     expect($routerNode->mysql_router_installed)->toBeTrue();
 
     $progress = Cache::get(SetupRouterJob::progressKey($routerNode->id));
@@ -125,10 +125,10 @@ it('sets up a router successfully when already installed and running', function 
 });
 
 it('sets node to error when SSH connection fails', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $routerNode = Node::factory()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $routerNode = MysqlNode::factory()->create([
         'cluster_id' => $cluster->id,
-        'role' => NodeRole::Access,
+        'role' => MysqlNodeRole::Access,
     ]);
 
     $job = new SetupRouterJob($cluster, $routerNode);
@@ -139,7 +139,7 @@ it('sets node to error when SSH connection fails', function () {
         'error' => 'Connection timed out',
     ]);
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $firewallService = Mockery::mock(FirewallService::class);
 
     Log::shouldReceive('error')->once();
@@ -147,7 +147,7 @@ it('sets node to error when SSH connection fails', function () {
     $job->handle($provisionService, $firewallService, $sshService);
 
     $routerNode->refresh();
-    expect($routerNode->status)->toBe(NodeStatus::Error);
+    expect($routerNode->status)->toBe(MysqlNodeStatus::Error);
 
     $progress = Cache::get(SetupRouterJob::progressKey($routerNode->id));
     expect($progress['status'])->toBe('failed');
@@ -155,10 +155,10 @@ it('sets node to error when SSH connection fails', function () {
 });
 
 it('sets node to error when OS cannot be detected', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $routerNode = Node::factory()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $routerNode = MysqlNode::factory()->create([
         'cluster_id' => $cluster->id,
-        'role' => NodeRole::Access,
+        'role' => MysqlNodeRole::Access,
     ]);
 
     $job = new SetupRouterJob($cluster, $routerNode);
@@ -170,7 +170,7 @@ it('sets node to error when OS cannot be detected', function () {
         'os' => null,
     ]);
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $firewallService = Mockery::mock(FirewallService::class);
 
     Log::shouldReceive('error')->once();
@@ -178,7 +178,7 @@ it('sets node to error when OS cannot be detected', function () {
     $job->handle($provisionService, $firewallService, $sshService);
 
     $routerNode->refresh();
-    expect($routerNode->status)->toBe(NodeStatus::Error);
+    expect($routerNode->status)->toBe(MysqlNodeStatus::Error);
 
     $progress = Cache::get(SetupRouterJob::progressKey($routerNode->id));
     expect($progress['status'])->toBe('failed');
@@ -186,12 +186,12 @@ it('sets node to error when OS cannot be detected', function () {
 });
 
 it('sets node to error when router installation fails', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'mysql_apt_config_version' => '0.8.33-1',
     ]);
-    $routerNode = Node::factory()->create([
+    $routerNode = MysqlNode::factory()->create([
         'cluster_id' => $cluster->id,
-        'role' => NodeRole::Access,
+        'role' => MysqlNodeRole::Access,
     ]);
 
     $job = new SetupRouterJob($cluster, $routerNode);
@@ -203,7 +203,7 @@ it('sets node to error when router installation fails', function () {
         'os' => 'Ubuntu 22.04',
     ]);
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $provisionService->shouldReceive('getRouterStatus')->once()->andReturn([
         'running' => false,
     ]);
@@ -218,21 +218,21 @@ it('sets node to error when router installation fails', function () {
     $job->handle($provisionService, $firewallService, $sshService);
 
     $routerNode->refresh();
-    expect($routerNode->status)->toBe(NodeStatus::Error);
+    expect($routerNode->status)->toBe(MysqlNodeStatus::Error);
 
     $progress = Cache::get(SetupRouterJob::progressKey($routerNode->id));
     expect($progress['status'])->toBe('failed');
 });
 
 it('sets node to error when no primary node exists for bootstrap', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
     ]);
     // No primary node
-    $routerNode = Node::factory()->create([
+    $routerNode = MysqlNode::factory()->create([
         'cluster_id' => $cluster->id,
-        'role' => NodeRole::Access,
+        'role' => MysqlNodeRole::Access,
     ]);
 
     $job = new SetupRouterJob($cluster, $routerNode);
@@ -245,7 +245,7 @@ it('sets node to error when no primary node exists for bootstrap', function () {
     ]);
     $sshService->shouldReceive('exec')->andReturn(['output' => '', 'exit_code' => 0]);
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $provisionService->shouldReceive('getRouterStatus')->once()->andReturn([
         'running' => true,
     ]);
@@ -258,7 +258,7 @@ it('sets node to error when no primary node exists for bootstrap', function () {
     $job->handle($provisionService, $firewallService, $sshService);
 
     $routerNode->refresh();
-    expect($routerNode->status)->toBe(NodeStatus::Error);
+    expect($routerNode->status)->toBe(MysqlNodeStatus::Error);
 
     $progress = Cache::get(SetupRouterJob::progressKey($routerNode->id));
     expect($progress['status'])->toBe('failed');
@@ -266,14 +266,14 @@ it('sets node to error when no primary node exists for bootstrap', function () {
 });
 
 it('sets node to error when bootstrap fails', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
     ]);
-    $primary = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
-    $routerNode = Node::factory()->create([
+    $primary = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $routerNode = MysqlNode::factory()->create([
         'cluster_id' => $cluster->id,
-        'role' => NodeRole::Access,
+        'role' => MysqlNodeRole::Access,
     ]);
 
     $job = new SetupRouterJob($cluster, $routerNode);
@@ -286,7 +286,7 @@ it('sets node to error when bootstrap fails', function () {
     ]);
     $sshService->shouldReceive('exec')->andReturn(['output' => '', 'exit_code' => 0]);
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $provisionService->shouldReceive('getRouterStatus')->once()->andReturn([
         'running' => true,
     ]);
@@ -303,7 +303,7 @@ it('sets node to error when bootstrap fails', function () {
     $job->handle($provisionService, $firewallService, $sshService);
 
     $routerNode->refresh();
-    expect($routerNode->status)->toBe(NodeStatus::Error);
+    expect($routerNode->status)->toBe(MysqlNodeStatus::Error);
 
     $progress = Cache::get(SetupRouterJob::progressKey($routerNode->id));
     expect($progress['status'])->toBe('failed');
@@ -311,15 +311,15 @@ it('sets node to error when bootstrap fails', function () {
 });
 
 it('stores progress steps in cache and resolves running steps', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
         'mysql_apt_config_version' => '0.8.33-1',
     ]);
-    $primary = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
-    $routerNode = Node::factory()->create([
+    $primary = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $routerNode = MysqlNode::factory()->create([
         'cluster_id' => $cluster->id,
-        'role' => NodeRole::Access,
+        'role' => MysqlNodeRole::Access,
     ]);
 
     $job = new SetupRouterJob($cluster, $routerNode);
@@ -332,7 +332,7 @@ it('stores progress steps in cache and resolves running steps', function () {
     ]);
     $sshService->shouldReceive('exec')->andReturn(['output' => '', 'exit_code' => 0]);
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $provisionService->shouldReceive('getRouterStatus')->once()->andReturn([
         'running' => false,
     ]);
@@ -360,16 +360,16 @@ it('stores progress steps in cache and resolves running steps', function () {
 });
 
 it('defaults allowFrom to any', function () {
-    $cluster = Cluster::factory()->create();
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->create();
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
     $job = new SetupRouterJob($cluster, $node);
 
     expect($job->allowFrom)->toBe('any');
 });
 
 it('accepts custom allowFrom value', function () {
-    $cluster = Cluster::factory()->create();
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->create();
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
     $job = new SetupRouterJob($cluster, $node, '192.168.1.0/24');
 
     expect($job->allowFrom)->toBe('192.168.1.0/24');

@@ -2,23 +2,23 @@
 
 namespace Database\Factories;
 
-use App\Enums\NodeRole;
-use App\Enums\NodeStatus;
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Enums\MysqlNodeRole;
+use App\Enums\MysqlNodeStatus;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends Factory<Node>
+ * @extends Factory<MysqlNode>
  */
-class NodeFactory extends Factory
+class MysqlNodeFactory extends Factory
 {
-    protected $model = Node::class;
+    protected $model = MysqlNode::class;
 
     public function definition(): array
     {
         return [
-            'cluster_id' => Cluster::factory(),
+            'cluster_id' => MysqlCluster::factory(),
             'name' => 'node-'.fake()->numberBetween(1, 99),
             'host' => fake()->ipv4(),
             'ssh_port' => 22,
@@ -27,8 +27,8 @@ class NodeFactory extends Factory
             'ssh_public_key' => 'ssh-ed25519 AAAA testkey',
             'mysql_port' => 3306,
             'mysql_x_port' => 33060,
-            'role' => NodeRole::Pending,
-            'status' => NodeStatus::Unknown,
+            'role' => MysqlNodeRole::Pending,
+            'status' => MysqlNodeStatus::Unknown,
             'server_id' => fake()->numberBetween(1, 999),
             'mysql_installed' => false,
             'mysql_shell_installed' => false,
@@ -43,8 +43,8 @@ class NodeFactory extends Factory
     public function primary(): static
     {
         return $this->state(fn () => [
-            'role' => NodeRole::Primary,
-            'status' => NodeStatus::Online,
+            'role' => MysqlNodeRole::Primary,
+            'status' => MysqlNodeStatus::Online,
             'mysql_installed' => true,
             'mysql_shell_installed' => true,
             'mysql_configured' => true,
@@ -54,8 +54,8 @@ class NodeFactory extends Factory
     public function secondary(): static
     {
         return $this->state(fn () => [
-            'role' => NodeRole::Secondary,
-            'status' => NodeStatus::Online,
+            'role' => MysqlNodeRole::Secondary,
+            'status' => MysqlNodeStatus::Online,
             'mysql_installed' => true,
             'mysql_shell_installed' => true,
             'mysql_configured' => true,
@@ -65,14 +65,14 @@ class NodeFactory extends Factory
     public function access(): static
     {
         return $this->state(fn () => [
-            'role' => NodeRole::Access,
-            'status' => NodeStatus::Online,
+            'role' => MysqlNodeRole::Access,
+            'status' => MysqlNodeStatus::Online,
             'mysql_router_installed' => true,
         ]);
     }
 
     public function offline(): static
     {
-        return $this->state(fn () => ['status' => NodeStatus::Offline]);
+        return $this->state(fn () => ['status' => MysqlNodeStatus::Offline]);
     }
 }

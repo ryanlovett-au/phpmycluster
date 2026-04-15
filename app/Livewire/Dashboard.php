@@ -3,7 +3,7 @@
 namespace App\Livewire;
 
 use App\Models\AuditLog;
-use App\Models\Cluster;
+use App\Models\MysqlCluster;
 use Illuminate\Support\Facades\Artisan;
 use Livewire\Component;
 
@@ -26,7 +26,7 @@ class Dashboard extends Component
     public function render()
     {
         return view('livewire.dashboard', [
-            'clusters' => Cluster::with(['nodes'])->get(),
+            'clusters' => MysqlCluster::with(['nodes'])->get(),
             'recentLogs' => AuditLog::latest()->limit(20)->get(),
         ])->layout('layouts.app', ['title' => __('Dashboard')]);
     }

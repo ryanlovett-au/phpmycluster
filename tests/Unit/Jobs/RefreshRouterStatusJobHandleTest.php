@@ -1,21 +1,21 @@
 <?php
 
 use App\Jobs\RefreshRouterStatusJob;
-use App\Models\Cluster;
-use App\Models\Node;
-use App\Services\NodeProvisionService;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
+use App\Services\MysqlProvisionService;
 
 it('updates node to online when router is running', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->access()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->access()->create([
         'cluster_id' => $cluster->id,
         'status' => 'offline',
     ]);
 
-    $provisionMock = Mockery::mock(NodeProvisionService::class);
+    $provisionMock = Mockery::mock(MysqlProvisionService::class);
     $provisionMock->shouldReceive('getRouterStatus')
         ->once()
-        ->with(Mockery::on(fn (Node $n) => $n->id === $node->id))
+        ->with(Mockery::on(fn (MysqlNode $n) => $n->id === $node->id))
         ->andReturn([
             'running' => true,
             'output' => "active\nMySQLRouter 8.4.0",
@@ -30,13 +30,13 @@ it('updates node to online when router is running', function () {
 });
 
 it('updates node to offline when router is not running', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->access()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->access()->create([
         'cluster_id' => $cluster->id,
         'status' => 'online',
     ]);
 
-    $provisionMock = Mockery::mock(NodeProvisionService::class);
+    $provisionMock = Mockery::mock(MysqlProvisionService::class);
     $provisionMock->shouldReceive('getRouterStatus')
         ->once()
         ->andReturn([
@@ -52,13 +52,13 @@ it('updates node to offline when router is not running', function () {
 });
 
 it('marks node as error when getRouterStatus throws', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->access()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->access()->create([
         'cluster_id' => $cluster->id,
         'status' => 'online',
     ]);
 
-    $provisionMock = Mockery::mock(NodeProvisionService::class);
+    $provisionMock = Mockery::mock(MysqlProvisionService::class);
     $provisionMock->shouldReceive('getRouterStatus')
         ->once()
         ->andThrow(new RuntimeException('SSH connection failed'));

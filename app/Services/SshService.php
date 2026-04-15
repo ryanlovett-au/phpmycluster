@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\AuditLog;
-use App\Models\Node;
+use App\Models\MysqlNode;
 use Illuminate\Support\Facades\Log;
 use phpseclib3\Crypt\EC;
 use phpseclib3\Crypt\PublicKeyLoader;
@@ -34,7 +34,7 @@ class SshService
      *
      * @codeCoverageIgnore Thin wrapper around phpseclib SSH2 — requires real network connection to test.
      */
-    public function connect(Node $node, int $timeout = 10): SSH2
+    public function connect(MysqlNode $node, int $timeout = 10): SSH2
     {
         $ssh = new SSH2($node->host, $node->ssh_port, $timeout);
 
@@ -54,7 +54,7 @@ class SshService
      *
      * @codeCoverageIgnore Thin wrapper around phpseclib SFTP — requires real network connection to test.
      */
-    public function connectSftp(Node $node, int $timeout = 10): SFTP
+    public function connectSftp(MysqlNode $node, int $timeout = 10): SFTP
     {
         $sftp = new SFTP($node->host, $node->ssh_port, $timeout);
 
@@ -71,7 +71,7 @@ class SshService
      * Execute a command on a node and return the output.
      * Logs everything to audit_logs.
      */
-    public function exec(Node $node, string $command, string $action = 'ssh.exec', bool $sudo = false, int $timeout = 300): array
+    public function exec(MysqlNode $node, string $command, string $action = 'ssh.exec', bool $sudo = false, int $timeout = 300): array
     {
         $start = microtime(true);
 
@@ -130,7 +130,7 @@ class SshService
     /**
      * Test SSH connectivity to a node.
      */
-    public function testConnection(Node $node): array
+    public function testConnection(MysqlNode $node): array
     {
         try {
             $ssh = $this->connect($node);
@@ -188,7 +188,7 @@ class SshService
     /**
      * Test network connectivity between two nodes (run from source, test to target).
      */
-    public function testNodeConnectivity(Node $source, Node $target, int $port): array
+    public function testNodeConnectivity(MysqlNode $source, MysqlNode $target, int $port): array
     {
         $result = $this->exec(
             $source,
@@ -206,7 +206,7 @@ class SshService
     /**
      * Upload a file to a node via SFTP.
      */
-    public function uploadFile(Node $node, string $remotePath, string $content): bool
+    public function uploadFile(MysqlNode $node, string $remotePath, string $content): bool
     {
         $sftp = $this->connectSftp($node);
 

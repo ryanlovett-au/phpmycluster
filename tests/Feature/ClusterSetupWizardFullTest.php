@@ -2,8 +2,8 @@
 
 use App\Jobs\ProvisionClusterJob;
 use App\Livewire\ClusterSetupWizard;
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
 use App\Services\SshService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
@@ -45,12 +45,12 @@ it('renders the create cluster heading', function () {
 
 it('loads existing cluster data in reprovision mode', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'name' => 'existing-cluster',
         'communication_stack' => 'MYSQL',
         'cluster_admin_user' => 'clusteradmin',
     ]);
-    $node = Node::factory()->create([
+    $node = MysqlNode::factory()->create([
         'cluster_id' => $cluster->id,
         'name' => 'node-1',
         'host' => '10.0.0.1',
@@ -71,11 +71,11 @@ it('loads existing cluster data in reprovision mode', function () {
 
 it('skips to step 4 when SSH key works in reprovision mode', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'name' => 'working-cluster',
         'cluster_admin_user' => 'clusteradmin',
     ]);
-    $node = Node::factory()->create([
+    $node = MysqlNode::factory()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.1',
         'ssh_private_key_encrypted' => 'valid-key-content',
@@ -96,11 +96,11 @@ it('skips to step 4 when SSH key works in reprovision mode', function () {
 
 it('sets sshKeyAuthFailed when SSH key auth fails in reprovision', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'name' => 'auth-fail-cluster',
         'cluster_admin_user' => 'clusteradmin',
     ]);
-    $node = Node::factory()->create([
+    $node = MysqlNode::factory()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.2',
         'ssh_private_key_encrypted' => 'bad-key-content',
@@ -122,11 +122,11 @@ it('sets sshKeyAuthFailed when SSH key auth fails in reprovision', function () {
 
 it('handles SSH test exception during reprovision mount', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'name' => 'exception-cluster',
         'cluster_admin_user' => 'clusteradmin',
     ]);
-    $node = Node::factory()->create([
+    $node = MysqlNode::factory()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.3',
         'ssh_private_key_encrypted' => 'some-key',
@@ -197,7 +197,7 @@ it('fails step 1 validation with short admin password', function () {
 
 it('fails step 1 validation with duplicate cluster name', function () {
     $user = createAdmin();
-    Cluster::factory()->create(['name' => 'taken-name']);
+    MysqlCluster::factory()->create(['name' => 'taken-name']);
 
     Livewire::actingAs($user)
         ->test(ClusterSetupWizard::class)
@@ -423,7 +423,7 @@ it('creates a new cluster and node when provisioning', function () {
 
     Queue::assertPushed(ProvisionClusterJob::class);
 
-    $cluster = Cluster::where('name', 'provision-test')->first();
+    $cluster = MysqlCluster::where('name', 'provision-test')->first();
     expect($cluster)->not->toBeNull();
     expect($cluster->status->value)->toBe('pending');
 
@@ -458,7 +458,7 @@ it('provisions with generated key', function () {
         ->call('provision')
         ->assertSet('provisioning', true);
 
-    $cluster = Cluster::where('name', 'gen-key-cluster')->first();
+    $cluster = MysqlCluster::where('name', 'gen-key-cluster')->first();
     $node = $cluster->nodes()->first();
     expect($node->ssh_public_key)->toBe('gen-pub');
 });
@@ -479,7 +479,7 @@ it('uses custom seed name when provided', function () {
         ->set('mysqlRootPassword', 'rootpass123')
         ->call('provision');
 
-    $cluster = Cluster::where('name', 'named-node-cluster')->first();
+    $cluster = MysqlCluster::where('name', 'named-node-cluster')->first();
     $node = $cluster->nodes()->first();
     expect($node->name)->toBe('my-primary-node');
 });
@@ -489,11 +489,11 @@ it('uses custom seed name when provided', function () {
 it('updates existing records when reprovisioning', function () {
     Queue::fake();
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'name' => 'reprov-cluster',
         'cluster_admin_user' => 'clusteradmin',
     ]);
-    $node = Node::factory()->primary()->create([
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.1',
         'mysql_root_password_encrypted' => 'old-root-pass',
@@ -524,11 +524,11 @@ it('updates existing records when reprovisioning', function () {
 it('uses stored root password when empty in reprovision', function () {
     Queue::fake();
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'name' => 'stored-pass-cluster',
         'cluster_admin_user' => 'clusteradmin',
     ]);
-    $node = Node::factory()->primary()->create([
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.1',
         'mysql_root_password_encrypted' => 'stored-pass',
@@ -553,11 +553,11 @@ it('uses stored root password when empty in reprovision', function () {
 it('preserves SSH key if not provided in reprovision', function () {
     Queue::fake();
     $user = createAdmin();
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'name' => 'preserve-key-cluster',
         'cluster_admin_user' => 'clusteradmin',
     ]);
-    $node = Node::factory()->create([
+    $node = MysqlNode::factory()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.1',
         'ssh_private_key_encrypted' => 'original-key',
@@ -586,12 +586,12 @@ it('preserves SSH key if not provided in reprovision', function () {
 it('uses stored root password for reprovision when empty', function () {
     Queue::fake();
     $user = createAdmin();
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'name' => 'no-pass-reprov',
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
     ]);
-    $node = Node::factory()->create([
+    $node = MysqlNode::factory()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.1',
         'ssh_private_key_encrypted' => 'key',
@@ -630,7 +630,7 @@ it('does nothing when no clusterId is set', function () {
 
 it('updates steps from cache during provisioning', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->create();
+    $cluster = MysqlCluster::factory()->create();
 
     $steps = [
         ['message' => 'Installing MySQL...', 'status' => 'running', 'time' => '12:00:00'],
@@ -651,7 +651,7 @@ it('updates steps from cache during provisioning', function () {
 
 it('marks provisioning complete when cache says complete', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->create();
+    $cluster = MysqlCluster::factory()->create();
 
     Cache::put(ProvisionClusterJob::progressKey($cluster->id), [
         'steps' => [['message' => 'Done!', 'status' => 'success', 'time' => '12:01:00']],
@@ -669,7 +669,7 @@ it('marks provisioning complete when cache says complete', function () {
 
 it('stops provisioning when cache says failed', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->create();
+    $cluster = MysqlCluster::factory()->create();
 
     Cache::put(ProvisionClusterJob::progressKey($cluster->id), [
         'steps' => [['message' => 'Error occurred', 'status' => 'error', 'time' => '12:01:00']],
@@ -687,7 +687,7 @@ it('stops provisioning when cache says failed', function () {
 
 it('returns early from pollProgress when no cache exists', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->create();
+    $cluster = MysqlCluster::factory()->create();
 
     // No cache entry
     Livewire::actingAs($user)
@@ -719,11 +719,11 @@ it('has correct default property values', function () {
 
 it('allows the same cluster name in reprovision mode', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'name' => 'existing-cluster',
         'cluster_admin_user' => 'clusteradmin',
     ]);
-    $node = Node::factory()->create([
+    $node = MysqlNode::factory()->create([
         'cluster_id' => $cluster->id,
         'ssh_private_key_encrypted' => '',
     ]);
@@ -742,11 +742,11 @@ it('allows the same cluster name in reprovision mode', function () {
 
 it('loads mysql root password from node in reprovision mode', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'name' => 'load-pass-cluster',
         'cluster_admin_user' => 'clusteradmin',
     ]);
-    $node = Node::factory()->create([
+    $node = MysqlNode::factory()->create([
         'cluster_id' => $cluster->id,
         'ssh_private_key_encrypted' => '',
         'mysql_root_password_encrypted' => 'stored-mysql-root',
@@ -761,11 +761,11 @@ it('loads mysql root password from node in reprovision mode', function () {
 
 it('loads SSH and mysql port settings from existing node', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'name' => 'ports-cluster',
         'cluster_admin_user' => 'clusteradmin',
     ]);
-    $node = Node::factory()->create([
+    $node = MysqlNode::factory()->create([
         'cluster_id' => $cluster->id,
         'host' => '10.0.0.99',
         'ssh_port' => 2222,
@@ -799,7 +799,7 @@ it('sets initial cache progress when provisioning', function () {
         ->set('mysqlRootPassword', 'rootpass123')
         ->call('provision');
 
-    $cluster = Cluster::where('name', 'cache-test-cluster')->first();
+    $cluster = MysqlCluster::where('name', 'cache-test-cluster')->first();
     $progress = Cache::get(ProvisionClusterJob::progressKey($cluster->id));
     expect($progress)->not->toBeNull();
     expect($progress['status'])->toBe('running');
@@ -824,7 +824,7 @@ it('saves communication stack setting when provisioning', function () {
         ->set('mysqlRootPassword', 'rootpass')
         ->call('provision');
 
-    $cluster = Cluster::where('name', 'xcom-cluster')->first();
+    $cluster = MysqlCluster::where('name', 'xcom-cluster')->first();
     expect($cluster->communication_stack)->toBe('XCOM');
     expect($cluster->cluster_admin_user)->toBe('myadmin');
 });

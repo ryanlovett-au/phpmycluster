@@ -3,11 +3,11 @@
 namespace App\Jobs;
 
 use App\Jobs\Concerns\ProvisionesNode;
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
 use App\Services\FirewallService;
+use App\Services\MysqlProvisionService;
 use App\Services\MysqlShellService;
-use App\Services\NodeProvisionService;
 use App\Services\SshService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -31,8 +31,8 @@ class AddNodeJob implements ShouldQueue
     public int $tries = 1;
 
     public function __construct(
-        public Cluster $cluster,
-        public Node $node,
+        public MysqlCluster $cluster,
+        public MysqlNode $node,
     ) {}
 
     /**
@@ -55,7 +55,7 @@ class AddNodeJob implements ShouldQueue
      * Get the root password for configureInstance.
      * For secondary nodes, root may use auth_socket so we try the cluster admin password.
      */
-    protected function getRootPassword(Cluster $cluster, Node $node): string
+    protected function getRootPassword(MysqlCluster $cluster, MysqlNode $node): string
     {
         return $cluster->cluster_admin_password_encrypted;
     }
@@ -64,7 +64,7 @@ class AddNodeJob implements ShouldQueue
      * Execute the job.
      */
     public function handle(
-        NodeProvisionService $provisionService,
+        MysqlProvisionService $provisionService,
         FirewallService $firewallService,
         MysqlShellService $mysqlShell,
         SshService $sshService,

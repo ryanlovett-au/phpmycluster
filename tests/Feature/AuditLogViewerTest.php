@@ -2,8 +2,8 @@
 
 use App\Livewire\AuditLogViewer;
 use App\Models\AuditLog;
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
 use Livewire\Livewire;
 
 it('allows an approved user to view the audit logs page', function () {
@@ -16,8 +16,8 @@ it('allows an approved user to view the audit logs page', function () {
 
 it('shows recent audit log entries', function () {
     $user = createApprovedUser();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     AuditLog::factory()->create([
         'cluster_id' => $cluster->id,

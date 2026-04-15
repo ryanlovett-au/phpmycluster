@@ -2,7 +2,7 @@
 
 namespace App\Enums;
 
-enum NodeStatus: string
+enum MysqlNodeStatus: string
 {
     case Unknown = 'unknown';
     case Online = 'online';

@@ -1,10 +1,10 @@
 <?php
 
 use App\Jobs\Concerns\ProvisionesNode;
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
+use App\Services\MysqlProvisionService;
 use App\Services\MysqlShellService;
-use App\Services\NodeProvisionService;
 use App\Services\SshService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -24,7 +24,7 @@ class TraitTestJob
         return $this->cacheKey;
     }
 
-    protected function getRootPassword(Cluster $cluster, Node $node): string
+    protected function getRootPassword(MysqlCluster $cluster, MysqlNode $node): string
     {
         return 'test-root-password';
     }
@@ -176,11 +176,11 @@ it('verifyOfficialRepo throws when both packages not from official repo', functi
 // --- detectHostState() tests ---
 
 it('detectHostState detects a fully provisioned host', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
     ]);
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $ssh = Mockery::mock(SSH2::class);
     $ssh->shouldReceive('exec')
@@ -230,11 +230,11 @@ it('detectHostState detects a fully provisioned host', function () {
 });
 
 it('detectHostState returns defaults for a fresh host', function () {
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
     ]);
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
 
     $ssh = Mockery::mock(SSH2::class);
     $ssh->shouldReceive('exec')
@@ -270,11 +270,11 @@ it('detectHostState returns defaults for a fresh host', function () {
 });
 
 it('detectHostState handles connection exception gracefully', function () {
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
     ]);
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
 
     $sshService = Mockery::mock(SshService::class);
     $sshService->shouldReceive('connect')->once()->andThrow(new RuntimeException('Connection refused'));
@@ -298,13 +298,13 @@ it('detectHostState handles connection exception gracefully', function () {
 // --- installMysql() tests ---
 
 it('installMysql succeeds with pinned version', function () {
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'mysql_version' => '8.4.0',
         'mysql_apt_config_version' => '0.8.33-1',
     ]);
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $provisionService->shouldReceive('installMysql')
         ->once()
         ->with($node, '0.8.33-1', '8.4.0')
@@ -329,13 +329,13 @@ it('installMysql succeeds with pinned version', function () {
 });
 
 it('installMysql resolves latest version when not pinned', function () {
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'mysql_version' => null,
         'mysql_apt_config_version' => null,
     ]);
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $provisionService->shouldReceive('resolveLatestAptConfigVersion')
         ->once()
         ->andReturn('0.8.33-1');
@@ -363,13 +363,13 @@ it('installMysql resolves latest version when not pinned', function () {
 });
 
 it('installMysql throws when mysql_installed is false', function () {
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'mysql_version' => '8.4.0',
         'mysql_apt_config_version' => '0.8.33-1',
     ]);
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $provisionService->shouldReceive('installMysql')
         ->once()
         ->andReturn([
@@ -386,13 +386,13 @@ it('installMysql throws when mysql_installed is false', function () {
 });
 
 it('installMysql throws when shell not from official repo', function () {
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'mysql_version' => '8.4.0',
         'mysql_apt_config_version' => '0.8.33-1',
     ]);
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $provisionService->shouldReceive('installMysql')
         ->once()
         ->andReturn([
@@ -416,11 +416,11 @@ it('installMysql throws when shell not from official repo', function () {
 // --- provisionNode() full integration tests ---
 
 it('provisionNode succeeds when everything already installed', function () {
-    $cluster = Cluster::factory()->online()->create([
+    $cluster = MysqlCluster::factory()->online()->create([
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
     ]);
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
 
     $fullyProvisionedState = [
         'os' => 'Ubuntu 22.04',
@@ -468,7 +468,7 @@ it('provisionNode succeeds when everything already installed', function () {
         ->with(Mockery::pattern('/mysqlsh --no-wizard/'))
         ->andReturn('');
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $provisionService->shouldReceive('detectSystemInfo')->once()->andReturn(['ram_mb' => 4096, 'cpu_cores' => 2, 'os_name' => 'Ubuntu 22.04']);
     $provisionService->shouldReceive('restartMysql')->once()->andReturn(['success' => true]);
 
@@ -492,13 +492,13 @@ it('provisionNode succeeds when everything already installed', function () {
 });
 
 it('provisionNode runs full install path for fresh host', function () {
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
         'mysql_version' => '8.4.0',
         'mysql_apt_config_version' => '0.8.33-1',
     ]);
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
 
     $sshService = Mockery::mock(SshService::class);
     $ssh = Mockery::mock(SSH2::class);
@@ -521,7 +521,7 @@ it('provisionNode runs full install path for fresh host', function () {
         ->with(Mockery::pattern('/test -f/'))
         ->andReturn('');
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $provisionService->shouldReceive('detectSystemInfo')->once()->andReturn(['ram_mb' => 8192, 'cpu_cores' => 4, 'os_name' => 'Ubuntu 22.04']);
     $provisionService->shouldReceive('installMysql')->once()->andReturn([
         'mysql_installed' => true,
@@ -555,11 +555,11 @@ it('provisionNode runs full install path for fresh host', function () {
 });
 
 it('provisionNode throws when OS cannot be detected', function () {
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
     ]);
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
 
     $sshService = Mockery::mock(SshService::class);
     $ssh = Mockery::mock(SSH2::class);
@@ -581,7 +581,7 @@ it('provisionNode throws when OS cannot be detected', function () {
         ->with(Mockery::pattern('/test -f/'))
         ->andReturn('');
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $provisionService->shouldReceive('detectOs')->once()->andReturn([
         'pretty_name' => null,
     ]);
@@ -598,13 +598,13 @@ it('provisionNode throws when OS cannot be detected', function () {
 });
 
 it('provisionNode uses detectOs fallback when state has no os', function () {
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
         'mysql_version' => '8.4.0',
         'mysql_apt_config_version' => '0.8.33-1',
     ]);
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
 
     $sshService = Mockery::mock(SshService::class);
     $ssh = Mockery::mock(SSH2::class);
@@ -639,7 +639,7 @@ it('provisionNode uses detectOs fallback when state has no os', function () {
         ->with(Mockery::pattern('/mysqlsh --no-wizard/'))
         ->andReturn('');
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $provisionService->shouldReceive('detectOs')->once()->andReturn([
         'pretty_name' => 'Debian 12',
     ]);
@@ -661,13 +661,13 @@ it('provisionNode uses detectOs fallback when state has no os', function () {
 });
 
 it('provisionNode throws when writeMysqlConfig fails', function () {
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
         'mysql_version' => '8.4.0',
         'mysql_apt_config_version' => '0.8.33-1',
     ]);
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
 
     $sshService = Mockery::mock(SshService::class);
     $ssh = Mockery::mock(SSH2::class);
@@ -695,7 +695,7 @@ it('provisionNode throws when writeMysqlConfig fails', function () {
         ->with(Mockery::pattern('/test -f/'))
         ->andReturn('');
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $provisionService->shouldReceive('detectSystemInfo')->once()->andReturn(['ram_mb' => 4096, 'cpu_cores' => 2, 'os_name' => 'Ubuntu 22.04']);
     $provisionService->shouldReceive('writeMysqlConfig')->once()->andReturn(['success' => false]);
 
@@ -711,13 +711,13 @@ it('provisionNode throws when writeMysqlConfig fails', function () {
 });
 
 it('provisionNode throws when restartMysql fails', function () {
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
         'mysql_version' => '8.4.0',
         'mysql_apt_config_version' => '0.8.33-1',
     ]);
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
 
     $sshService = Mockery::mock(SshService::class);
     $ssh = Mockery::mock(SSH2::class);
@@ -745,7 +745,7 @@ it('provisionNode throws when restartMysql fails', function () {
         ->with(Mockery::pattern('/test -f/'))
         ->andReturn('exists');
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $provisionService->shouldReceive('detectSystemInfo')->once()->andReturn(['ram_mb' => 4096, 'cpu_cores' => 2, 'os_name' => 'Ubuntu 22.04']);
     $provisionService->shouldReceive('restartMysql')->once()->andReturn(['success' => false]);
 
@@ -761,13 +761,13 @@ it('provisionNode throws when restartMysql fails', function () {
 });
 
 it('provisionNode throws when configureInstance fails', function () {
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
         'mysql_version' => '8.4.0',
         'mysql_apt_config_version' => '0.8.33-1',
     ]);
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
 
     $sshService = Mockery::mock(SshService::class);
     $ssh = Mockery::mock(SSH2::class);
@@ -789,7 +789,7 @@ it('provisionNode throws when configureInstance fails', function () {
         ->with(Mockery::pattern('/test -f/'))
         ->andReturn('');
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $provisionService->shouldReceive('detectSystemInfo')->once()->andReturn(['ram_mb' => 4096, 'cpu_cores' => 2, 'os_name' => 'Ubuntu 22.04']);
     $provisionService->shouldReceive('installMysql')->once()->andReturn([
         'mysql_installed' => true,

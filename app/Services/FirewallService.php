@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
 
 class FirewallService
 {
@@ -14,7 +14,7 @@ class FirewallService
     /**
      * Check if UFW is installed and active on a node.
      */
-    public function getStatus(Node $node): array
+    public function getStatus(MysqlNode $node): array
     {
         $result = $this->ssh->exec($node, 'which ufw && ufw status verbose 2>&1', 'firewall.status', sudo: true);
 
@@ -28,7 +28,7 @@ class FirewallService
     /**
      * Install UFW if not present.
      */
-    public function installUfw(Node $node): array
+    public function installUfw(MysqlNode $node): array
     {
         return $this->ssh->exec(
             $node,
@@ -42,7 +42,7 @@ class FirewallService
      * Configure UFW rules for a DB node in the cluster.
      * Opens only the required ports from the required sources.
      */
-    public function configureDbNode(Node $node, Cluster $cluster): array
+    public function configureDbNode(MysqlNode $node, MysqlCluster $cluster): array
     {
         $results = [];
 
@@ -104,7 +104,7 @@ class FirewallService
      * Configure UFW rules for an access (router) node.
      * Opens MySQL Router ports for application traffic.
      */
-    public function configureAccessNode(Node $node, Cluster $cluster, string $allowFrom = '127.0.0.1'): array
+    public function configureAccessNode(MysqlNode $node, MysqlCluster $cluster, string $allowFrom = '127.0.0.1'): array
     {
         $results = [];
 
@@ -140,7 +140,7 @@ class FirewallService
      * Add a firewall rule to allow a new node IP on all existing cluster nodes.
      * Called when adding a new node to the cluster.
      */
-    public function allowNewNodeOnCluster(Cluster $cluster, Node $newNode): array
+    public function allowNewNodeOnCluster(MysqlCluster $cluster, MysqlNode $newNode): array
     {
         $results = [];
 

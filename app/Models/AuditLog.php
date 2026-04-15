@@ -27,11 +27,11 @@ class AuditLog extends Model
 
     public function cluster(): BelongsTo
     {
-        return $this->belongsTo(Cluster::class);
+        return $this->belongsTo(MysqlCluster::class, 'cluster_id');
     }
 
     public function node(): BelongsTo
     {
-        return $this->belongsTo(Node::class);
+        return $this->belongsTo(MysqlNode::class, 'node_id');
     }
 }

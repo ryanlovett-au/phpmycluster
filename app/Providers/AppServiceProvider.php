@@ -4,8 +4,8 @@ namespace App\Providers;
 
 use App\Services\FirewallService;
 use App\Services\LogStreamService;
+use App\Services\MysqlProvisionService;
 use App\Services\MysqlShellService;
-use App\Services\NodeProvisionService;
 use App\Services\SshService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
@@ -22,7 +22,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(SshService::class);
         $this->app->singleton(MysqlShellService::class);
-        $this->app->singleton(NodeProvisionService::class);
+        $this->app->singleton(MysqlProvisionService::class);
         $this->app->singleton(FirewallService::class);
         $this->app->singleton(LogStreamService::class);
     }

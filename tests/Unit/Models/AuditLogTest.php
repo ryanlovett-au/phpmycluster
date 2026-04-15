@@ -1,8 +1,8 @@
 <?php
 
 use App\Models\AuditLog;
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -14,16 +14,16 @@ it('belongs to a cluster', function () {
     $log = AuditLog::factory()->create();
 
     expect($log->cluster())->toBeInstanceOf(BelongsTo::class)
-        ->and($log->cluster)->toBeInstanceOf(Cluster::class);
+        ->and($log->cluster)->toBeInstanceOf(MysqlCluster::class);
 });
 
 it('belongs to a node', function () {
-    $cluster = Cluster::factory()->create();
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->create();
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
     $log = AuditLog::factory()->forNode($node)->create();
 
     expect($log->node())->toBeInstanceOf(BelongsTo::class)
-        ->and($log->node)->toBeInstanceOf(Node::class);
+        ->and($log->node)->toBeInstanceOf(MysqlNode::class);
 });
 
 it('casts duration_ms to integer', function () {
