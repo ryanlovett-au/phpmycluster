@@ -1,7 +1,7 @@
     <div class="flex flex-col gap-6">
         {{-- Poll for refresh completion --}}
         @if($refreshing)
-            <div wire:poll.5s="pollRefresh"></div>
+            <div wire:poll.2s="pollRefresh"></div>
         @endif
 
         {{-- Header --}}
@@ -12,7 +12,8 @@
                     <flux:heading size="xl">{{ $cluster->name }}</flux:heading>
                     <flux:badge :color="match($cluster->status->value) {
                         'online' => 'green',
-                        'error', 'offline' => 'red',
+                        'degraded' => 'yellow',
+                        'offline', 'error' => 'red',
                         'syncing' => 'yellow',
                         default => 'zinc',
                     }">{{ ucfirst($cluster->status->value) }}</flux:badge>
@@ -47,7 +48,7 @@
                     {{ __('This cluster has not been fully provisioned. No master node has been established. You can re-provision the master node or delete this cluster and start again.') }}
                 </flux:callout.text>
                 <div class="mt-3 flex gap-2">
-                    <flux:button variant="primary" href="{{ route('redis.reprovision', $cluster) }}" wire:navigate icon="arrow-path">
+                    <flux:button variant="primary" wire:click="reprovision" icon="arrow-path">
                         {{ __('Re-provision Master Node') }}
                     </flux:button>
                     <flux:button variant="danger"
@@ -79,7 +80,7 @@
                                 <div>
                                     @if($renamingNodeId === $node->id)
                                         <div class="flex items-center gap-2">
-                                            <flux:input wire:model="renameValue" wire:keydown.enter="saveRename" wire:keydown.escape="cancelRename" size="sm" class="!py-0.5" autofocus />
+                                            <flux:input wire:model="renameNodeValue" wire:keydown.enter="saveRename" wire:keydown.escape="cancelRename" size="sm" class="!py-0.5" autofocus />
                                             <flux:button size="xs" variant="primary" wire:click="saveRename" icon="check">{{ __('Save') }}</flux:button>
                                             <flux:button size="xs" wire:click="cancelRename" icon="x-mark">{{ __('Cancel') }}</flux:button>
                                         </div>
@@ -89,7 +90,7 @@
                                             <flux:icon.pencil-square variant="mini" class="ml-1 inline size-3.5 text-zinc-400 opacity-0 group-hover:opacity-100" />
                                         </flux:heading>
                                     @endif
-                                    <flux:text class="text-xs">{{ $node->server->host }}</flux:text>
+                                    <flux:text class="text-xs">{{ $node->server->host }}:{{ $node->redis_port }}</flux:text>
                                 </div>
                                 <flux:badge size="sm" :color="match($node->role->value) {
                                     'master' => 'red',
@@ -300,7 +301,7 @@
 
             {{-- Add Node --}}
             <div class="mt-4 flex justify-end gap-2">
-                <flux:button wire:click="$set('showAddNodeModal', true)" variant="primary" icon="plus">
+                <flux:button wire:click="$set('showAddNode', true)" variant="primary" icon="plus">
                     {{ __('Add Node') }}
                 </flux:button>
             </div>
@@ -455,82 +456,82 @@
         {{-- ═══════════════════════════════════════════════════════════════ --}}
         {{-- Add Node Modal --}}
         {{-- ═══════════════════════════════════════════════════════════════ --}}
-        <flux:modal wire:model="showAddNodeModal">
+        <flux:modal wire:model="showAddNode">
             <div class="space-y-6">
                 <flux:heading size="lg">{{ __('Add Redis Node') }}</flux:heading>
 
                 {{-- Server selection --}}
                 @if($availableServers->isNotEmpty())
-                    <flux:radio.group wire:model.live="addNodeServerMode" label="{{ __('Server') }}">
+                    <flux:radio.group wire:model.live="newNodeServerMode" label="{{ __('Server') }}">
                         <flux:radio value="existing" label="{{ __('Use an existing server') }}" />
                         <flux:radio value="new" label="{{ __('Configure a new server') }}" />
                     </flux:radio.group>
                 @endif
 
-                @if($addNodeServerMode === 'existing' && $availableServers->isNotEmpty())
+                @if($newNodeServerMode === 'existing' && $availableServers->isNotEmpty())
                     <div class="space-y-2">
                         @foreach($availableServers as $server)
-                            <label wire:click="$set('addNodeSelectedServerId', {{ $server->id }})" @class([
+                            <label wire:click="$set('newNodeSelectedServerId', {{ $server->id }})" @class([
                                 'flex cursor-pointer items-center justify-between rounded-lg border p-4 transition',
-                                'border-red-500 bg-red-50 dark:bg-red-900/10' => $addNodeSelectedServerId === $server->id,
-                                'border-neutral-200 hover:border-neutral-300 dark:border-neutral-700 dark:hover:border-neutral-600' => $addNodeSelectedServerId !== $server->id,
+                                'border-red-500 bg-red-50 dark:bg-red-900/10' => $newNodeSelectedServerId === $server->id,
+                                'border-neutral-200 hover:border-neutral-300 dark:border-neutral-700 dark:hover:border-neutral-600' => $newNodeSelectedServerId !== $server->id,
                             ])>
                                 <div class="flex items-center gap-3">
                                     <flux:icon.server variant="mini" @class([
                                         'size-5',
-                                        'text-red-500' => $addNodeSelectedServerId === $server->id,
-                                        'text-zinc-400' => $addNodeSelectedServerId !== $server->id,
+                                        'text-red-500' => $newNodeSelectedServerId === $server->id,
+                                        'text-zinc-400' => $newNodeSelectedServerId !== $server->id,
                                     ]) />
                                     <div>
                                         <div class="font-medium">{{ $server->name }}</div>
                                         <div class="text-xs text-zinc-500">{{ $server->ssh_user . '@' . $server->host . ':' . $server->ssh_port }}</div>
                                     </div>
                                 </div>
-                                @if($addNodeSelectedServerId === $server->id)
+                                @if($newNodeSelectedServerId === $server->id)
                                     <flux:icon.check-circle variant="mini" class="size-5 text-red-500" />
                                 @endif
                             </label>
                         @endforeach
-                        @error('addNodeSelectedServerId') <flux:text class="!text-red-500">{{ $message }}</flux:text> @enderror
+                        @error('newNodeSelectedServerId') <flux:text class="!text-red-500">{{ $message }}</flux:text> @enderror
                     </div>
 
                     <flux:separator />
 
                     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <flux:input wire:model="addNodeName" label="{{ __('Node Name (optional)') }}" placeholder="e.g. redis-replica-2" />
-                        <flux:input wire:model.number="addNodeRedisPort" type="number" label="{{ __('Redis Port') }}" />
-                        <flux:input wire:model.number="addNodeSentinelPort" type="number" label="{{ __('Sentinel Port') }}" />
+                        <flux:input wire:model="newNodeName" label="{{ __('Node Name (optional)') }}" placeholder="e.g. redis-replica-2" />
+                        <flux:input wire:model.number="newNodeRedisPort" type="number" label="{{ __('Redis Port') }}" />
+                        <flux:input wire:model.number="newNodeSentinelPort" type="number" label="{{ __('Sentinel Port') }}" />
                     </div>
                 @else
                     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <flux:input wire:model="addNodeHost" label="{{ __('Host IP / Hostname') }}" placeholder="e.g. 192.168.1.12" />
-                        <flux:input wire:model="addNodeName" label="{{ __('Node Name (optional)') }}" placeholder="e.g. redis-replica-2" />
-                        <flux:input wire:model="addNodeSshUser" label="{{ __('SSH User') }}" />
-                        <flux:input wire:model.number="addNodeSshPort" type="number" label="{{ __('SSH Port') }}" />
-                        <flux:input wire:model.number="addNodeRedisPort" type="number" label="{{ __('Redis Port') }}" />
-                        <flux:input wire:model.number="addNodeSentinelPort" type="number" label="{{ __('Sentinel Port') }}" />
+                        <flux:input wire:model="newNodeHost" label="{{ __('Host IP / Hostname') }}" placeholder="e.g. 192.168.1.12" />
+                        <flux:input wire:model="newNodeName" label="{{ __('Node Name (optional)') }}" placeholder="e.g. redis-replica-2" />
+                        <flux:input wire:model="newNodeSshUser" label="{{ __('SSH User') }}" />
+                        <flux:input wire:model.number="newNodeSshPort" type="number" label="{{ __('SSH Port') }}" />
+                        <flux:input wire:model.number="newNodeRedisPort" type="number" label="{{ __('Redis Port') }}" />
+                        <flux:input wire:model.number="newNodeSentinelPort" type="number" label="{{ __('Sentinel Port') }}" />
                     </div>
 
                     {{-- SSH Key --}}
                     <div>
-                        <flux:radio.group wire:model="addNodeSshKeyMode" label="{{ __('SSH Key') }}">
+                        <flux:radio.group wire:model="newNodeSshKeyMode" label="{{ __('SSH Key') }}">
                             <flux:radio value="generate" label="{{ __('Generate new key') }}" />
                             <flux:radio value="existing" label="{{ __('Paste existing key') }}" />
                         </flux:radio.group>
 
-                        @if($addNodeSshKeyMode === 'generate')
-                            @if(!$addNodeKeyPair)
-                                <flux:button wire:click="generateAddNodeKey" size="sm" class="mt-2" icon="key">
+                        @if($newNodeSshKeyMode === 'generate')
+                            @if(!$newNodeKeyPair)
+                                <flux:button wire:click="generateNewNodeKey" size="sm" class="mt-2" icon="key">
                                     {{ __('Generate Keypair') }}
                                 </flux:button>
                             @else
                                 <flux:callout variant="filled" class="mt-2">
                                     <flux:callout.heading>{{ __('Add this public key to the new node') }}</flux:callout.heading>
                                     <flux:callout.text>
-                                        SSH into <code class="font-mono font-bold">{{ $addNodeHost ?: 'your server' }}</code> and run:
+                                        SSH into <code class="font-mono font-bold">{{ $newNodeHost ?: 'your server' }}</code> and run:
                                     </flux:callout.text>
-                                    <div x-data="{ copied: false, cmd: @js('mkdir -p ~/.ssh && echo "' . $addNodeKeyPair['public'] . '" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys') }">
-                                        <code class="mt-2 block rounded bg-zinc-900 p-2 text-xs text-green-400 break-all">mkdir -p ~/.ssh && echo "{{ $addNodeKeyPair['public'] }}" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys</code>
+                                    <div x-data="{ copied: false, cmd: @js('mkdir -p ~/.ssh && echo "' . $newNodeKeyPair['public'] . '" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys') }">
+                                        <code class="mt-2 block rounded bg-zinc-900 p-2 text-xs text-green-400 break-all">mkdir -p ~/.ssh && echo "{{ $newNodeKeyPair['public'] }}" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys</code>
                                         <flux:button size="xs" variant="subtle" class="mt-1"
                                             x-on:click="navigator.clipboard.writeText(cmd); copied = true; setTimeout(() => copied = false, 2000)"
                                             icon="clipboard-document">
@@ -540,7 +541,7 @@
                                 </flux:callout>
                             @endif
                         @else
-                            <flux:textarea wire:model="addNodePrivateKey" rows="4" placeholder="Paste private key..." class="mt-2 font-mono text-xs" />
+                            <flux:textarea wire:model="newNodePrivateKey" rows="4" placeholder="Paste private key..." class="mt-2 font-mono text-xs" />
                         @endif
                     </div>
 
@@ -560,7 +561,7 @@
                 {{-- Actions --}}
                 <div class="flex gap-2">
                     <flux:button wire:click="addNode" variant="primary">{{ __('Add Node') }}</flux:button>
-                    <flux:button wire:click="$set('showAddNodeModal', false)">{{ __('Cancel') }}</flux:button>
+                    <flux:button wire:click="$set('showAddNode', false)">{{ __('Cancel') }}</flux:button>
                 </div>
             </div>
         </flux:modal>

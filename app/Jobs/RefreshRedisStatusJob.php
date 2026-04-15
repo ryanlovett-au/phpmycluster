@@ -108,7 +108,6 @@ class RefreshRedisStatusJob implements ShouldQueue
                     ]);
 
                     Cache::put("redis_cluster_status_{$cluster->id}", $statusData, now()->addMinutes(10));
-                    Cache::forget("redis_cluster_refreshing_{$cluster->id}");
 
                     return;
                 }
@@ -118,9 +117,6 @@ class RefreshRedisStatusJob implements ShouldQueue
                 $lastError = $e->getMessage();
             }
         }
-
-        // All nodes failed — still clear the refreshing flag
-        Cache::forget("redis_cluster_refreshing_{$cluster->id}");
 
         Log::warning("RefreshRedisStatusJob: all nodes failed for redis cluster {$cluster->id}: {$lastError}");
     }

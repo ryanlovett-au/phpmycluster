@@ -33,7 +33,7 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     Route::get('mysql/{cluster}/reprovision', ClusterSetupWizard::class)->name('mysql.reprovision');
     Route::get('mysql/{cluster}', ClusterManager::class)->name('mysql.manage');
     Route::get('mysql/{cluster}/routers', RouterManager::class)->name('mysql.routers');
-    Route::get('node/{node}/logs', NodeLogs::class)->name('node.logs');
+    Route::get('mysql/node/{node}/logs', NodeLogs::class)->name('mysql.node.logs');
 
     // Redis routes
     Route::get('redis/create', RedisSetupWizard::class)->name('redis.create');

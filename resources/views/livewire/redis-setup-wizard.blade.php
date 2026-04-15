@@ -290,7 +290,7 @@
                         </flux:callout>
                     @endif
 
-                    <flux:button wire:click="startProvision" variant="primary" icon="rocket-launch">
+                    <flux:button wire:click="provision" variant="primary" icon="rocket-launch">
                         {{ $isReprovision ? __('Begin Re-provisioning') : __('Begin Provisioning') }}
                     </flux:button>
                 @endif

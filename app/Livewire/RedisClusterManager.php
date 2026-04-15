@@ -10,6 +10,7 @@ use App\Models\Server;
 use App\Services\FirewallService;
 use App\Services\RedisCliService;
 use App\Services\SshService;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Component;
 
@@ -18,29 +19,29 @@ class RedisClusterManager extends Component
     public RedisCluster $cluster;
 
     // Add node form
-    public bool $showAddNodeModal = false;
+    public bool $showAddNode = false;
 
-    public string $addNodeServerMode = 'new'; // new or existing
+    public string $newNodeServerMode = 'new'; // new or existing
 
-    public ?int $addNodeSelectedServerId = null;
+    public ?int $newNodeSelectedServerId = null;
 
-    public string $addNodeHost = '';
+    public string $newNodeHost = '';
 
-    public string $addNodeName = '';
+    public string $newNodeName = '';
 
-    public int $addNodeSshPort = 22;
+    public int $newNodeSshPort = 22;
 
-    public string $addNodeSshUser = 'root';
+    public string $newNodeSshUser = 'root';
 
-    public int $addNodeRedisPort = 6379;
+    public int $newNodeRedisPort = 6379;
 
-    public int $addNodeSentinelPort = 26379;
+    public int $newNodeSentinelPort = 26379;
 
-    public string $addNodeSshKeyMode = 'generate';
+    public string $newNodeSshKeyMode = 'generate';
 
-    public string $addNodePrivateKey = '';
+    public string $newNodePrivateKey = '';
 
-    public ?array $addNodeKeyPair = null;
+    public ?array $newNodeKeyPair = null;
 
     // Add node provisioning progress
     public bool $addingNode = false;
@@ -65,7 +66,7 @@ class RedisClusterManager extends Component
     // Rename node
     public ?int $renamingNodeId = null;
 
-    public string $renameValue = '';
+    public string $renameNodeValue = '';
 
     // Status
     public bool $refreshing = false;
@@ -88,17 +89,21 @@ class RedisClusterManager extends Component
     // ─── Cluster Status ─────────────────────────────────────────────────
 
     /**
-     * Refresh cluster status by dispatching a background job.
+     * Refresh cluster status by dispatching a background job via Bus::batch.
      */
     public function refreshStatus()
     {
         $this->refreshing = true;
 
         try {
-            RefreshRedisStatusJob::dispatch($this->cluster);
+            $batch = Bus::batch([
+                new RefreshRedisStatusJob($this->cluster),
+            ])
+                ->name("Refresh {$this->cluster->name}")
+                ->allowFailures()
+                ->dispatch();
 
-            // Poll will check for completion
-            Cache::put("redis_cluster_refreshing_{$this->cluster->id}", true, now()->addMinutes(5));
+            $this->refreshBatchId = $batch->id;
         } catch (\Throwable $e) {
             $this->setMessage("Failed to dispatch refresh: {$e->getMessage()}", 'error');
             $this->refreshing = false;
@@ -106,16 +111,28 @@ class RedisClusterManager extends Component
     }
 
     /**
-     * Poll the refresh status for completion.
+     * Poll the refresh batch for completion.
      */
     public function pollRefresh(): void
     {
-        $stillRefreshing = Cache::get("redis_cluster_refreshing_{$this->cluster->id}");
+        if (! $this->refreshBatchId) {
+            return;
+        }
 
-        if (! $stillRefreshing) {
+        $batch = Bus::findBatch($this->refreshBatchId);
+
+        if (! $batch || $batch->finished()) {
             $this->cluster->refresh();
+
+            $failedJobs = $batch?->failedJobs ?? 0;
+            if ($failedJobs > 0) {
+                $this->setMessage("Cluster refreshed with {$failedJobs} failed check(s).", 'error');
+            } else {
+                $this->setMessage('Cluster status refreshed.', 'success');
+            }
+
             $this->refreshing = false;
-            $this->setMessage('Cluster status refreshed.', 'success');
+            $this->refreshBatchId = null;
         }
     }
 
@@ -124,9 +141,9 @@ class RedisClusterManager extends Component
     /**
      * Generate SSH key for new node.
      */
-    public function generateAddNodeKey()
+    public function generateNewNodeKey()
     {
-        $this->addNodeKeyPair = app(SshService::class)->generateKeyPair();
+        $this->newNodeKeyPair = app(SshService::class)->generateKeyPair();
     }
 
     /**
@@ -134,35 +151,35 @@ class RedisClusterManager extends Component
      */
     public function addNode()
     {
-        if ($this->addNodeServerMode === 'existing') {
+        if ($this->newNodeServerMode === 'existing') {
             $this->validate([
-                'addNodeSelectedServerId' => 'required|exists:servers,id',
+                'newNodeSelectedServerId' => 'required|exists:servers,id',
             ], [
-                'addNodeSelectedServerId.required' => 'Please select a server.',
+                'newNodeSelectedServerId.required' => 'Please select a server.',
             ]);
         } else {
             $this->validate([
-                'addNodeHost' => 'required|string',
+                'newNodeHost' => 'required|string',
             ]);
         }
 
         try {
-            if ($this->addNodeServerMode === 'existing' && $this->addNodeSelectedServerId) {
-                $server = Server::findOrFail($this->addNodeSelectedServerId);
+            if ($this->newNodeServerMode === 'existing' && $this->newNodeSelectedServerId) {
+                $server = Server::findOrFail($this->newNodeSelectedServerId);
             } else {
-                $privateKey = $this->addNodeSshKeyMode === 'generate'
-                    ? $this->addNodeKeyPair['private']
-                    : $this->addNodePrivateKey;
+                $privateKey = $this->newNodeSshKeyMode === 'generate'
+                    ? $this->newNodeKeyPair['private']
+                    : $this->newNodePrivateKey;
 
-                $publicKey = $this->addNodeSshKeyMode === 'generate'
-                    ? $this->addNodeKeyPair['public']
+                $publicKey = $this->newNodeSshKeyMode === 'generate'
+                    ? $this->newNodeKeyPair['public']
                     : '';
 
                 $server = Server::create([
-                    'name' => $this->addNodeName ?: "server-{$this->addNodeHost}",
-                    'host' => $this->addNodeHost,
-                    'ssh_port' => $this->addNodeSshPort,
-                    'ssh_user' => $this->addNodeSshUser,
+                    'name' => $this->newNodeName ?: "server-{$this->newNodeHost}",
+                    'host' => $this->newNodeHost,
+                    'ssh_port' => $this->newNodeSshPort,
+                    'ssh_user' => $this->newNodeSshUser,
                     'ssh_private_key_encrypted' => $privateKey,
                     'ssh_public_key' => $publicKey,
                 ]);
@@ -173,9 +190,9 @@ class RedisClusterManager extends Component
             $node = RedisNode::create([
                 'server_id' => $server->id,
                 'redis_cluster_id' => $this->cluster->id,
-                'name' => $this->addNodeName ?: 'node-'.($nodeCount + 1)."-{$server->host}",
-                'redis_port' => $this->addNodeRedisPort,
-                'sentinel_port' => $this->addNodeSentinelPort,
+                'name' => $this->newNodeName ?: 'node-'.($nodeCount + 1)."-{$server->host}",
+                'redis_port' => $this->newNodeRedisPort,
+                'sentinel_port' => $this->newNodeSentinelPort,
                 'role' => 'pending',
                 'status' => 'unknown',
             ]);
@@ -192,7 +209,7 @@ class RedisClusterManager extends Component
             $this->addNodeSteps = [
                 ['message' => "Starting provisioning for {$node->name}...", 'status' => 'running', 'time' => now()->format('H:i:s')],
             ];
-            $this->showAddNodeModal = false;
+            $this->showAddNode = false;
 
         } catch (\Throwable $e) { // @codeCoverageIgnore
             $this->setMessage("Error creating node: {$e->getMessage()}", 'error'); // @codeCoverageIgnore
@@ -555,7 +572,7 @@ class RedisClusterManager extends Component
     /**
      * Configure firewall rules for a node (add an IP/CIDR for Redis and Sentinel ports).
      */
-    public function configureFirewall(): void
+    public function addFirewallRule(): void
     {
         $this->validate([
             'firewallNewIp' => 'required|string',
@@ -598,7 +615,7 @@ class RedisClusterManager extends Component
     {
         $node = RedisNode::findOrFail($nodeId);
         $this->renamingNodeId = $nodeId;
-        $this->renameValue = $node->name;
+        $this->renameNodeValue = $node->name;
     }
 
     /**
@@ -615,10 +632,10 @@ class RedisClusterManager extends Component
         ]);
 
         $node = RedisNode::findOrFail($this->renamingNodeId);
-        $node->update(['name' => $this->renameValue]);
+        $node->update(['name' => $this->renameNodeValue]);
 
         $this->renamingNodeId = null;
-        $this->renameValue = '';
+        $this->renameNodeValue = '';
         $this->cluster->refresh();
     }
 
@@ -628,7 +645,7 @@ class RedisClusterManager extends Component
     public function cancelRename(): void
     {
         $this->renamingNodeId = null;
-        $this->renameValue = '';
+        $this->renameNodeValue = '';
     }
 
     // ─── SSH Test ───────────────────────────────────────────────────────
@@ -638,9 +655,9 @@ class RedisClusterManager extends Component
      */
     public function testSsh(): void
     {
-        $privateKey = $this->addNodeSshKeyMode === 'generate'
-            ? ($this->addNodeKeyPair['private'] ?? '')
-            : $this->addNodePrivateKey;
+        $privateKey = $this->newNodeSshKeyMode === 'generate'
+            ? ($this->newNodeKeyPair['private'] ?? '')
+            : $this->newNodePrivateKey;
 
         if (empty($privateKey)) {
             $this->sshTestResult = 'failed';
@@ -651,9 +668,9 @@ class RedisClusterManager extends Component
         try {
             $sshService = app(SshService::class);
             $result = $sshService->testConnectionDirect(
-                $this->addNodeHost,
-                $this->addNodeSshPort,
-                $this->addNodeSshUser,
+                $this->newNodeHost,
+                $this->newNodeSshPort,
+                $this->newNodeSshUser,
                 $privateKey,
             );
 
@@ -664,14 +681,6 @@ class RedisClusterManager extends Component
     }
 
     // ─── Firewall Actions ───────────────────────────────────────────────
-
-    /**
-     * Add a single firewall rule for a new IP.
-     */
-    public function addFirewallRule(): void
-    {
-        $this->configureFirewall();
-    }
 
     /**
      * Remove a specific firewall rule by number.
@@ -723,9 +732,14 @@ class RedisClusterManager extends Component
     public function retryAddNode(int $nodeId): void
     {
         $node = RedisNode::findOrFail($nodeId);
+
+        // Clear any previous progress
+        Cache::forget(AddRedisNodeJob::progressKey($node->id));
+
+        // Reset node status
         $node->update(['status' => 'unknown', 'role' => 'pending']);
 
-        Cache::forget(AddRedisNodeJob::progressKey($node->id));
+        // Dispatch the job
         AddRedisNodeJob::dispatch($this->cluster, $node);
 
         $this->addingNode = true;
@@ -737,6 +751,14 @@ class RedisClusterManager extends Component
     }
 
     // ─── Cluster Actions ────────────────────────────────────────────────
+
+    /**
+     * Re-provision: redirect to the setup wizard pre-loaded with this cluster's details.
+     */
+    public function reprovision()
+    {
+        return $this->redirect(route('redis.reprovision', $this->cluster), navigate: true);
+    }
 
     /**
      * Delete a cluster and all its nodes.
@@ -763,17 +785,17 @@ class RedisClusterManager extends Component
 
     protected function resetAddNodeForm(): void
     {
-        $this->showAddNodeModal = false;
-        $this->addNodeServerMode = 'new';
-        $this->addNodeSelectedServerId = null;
-        $this->addNodeHost = '';
-        $this->addNodeName = '';
-        $this->addNodeSshPort = 22;
-        $this->addNodeSshUser = 'root';
-        $this->addNodeRedisPort = 6379;
-        $this->addNodeSentinelPort = 26379;
-        $this->addNodeKeyPair = null;
-        $this->addNodePrivateKey = '';
+        $this->showAddNode = false;
+        $this->newNodeServerMode = 'new';
+        $this->newNodeSelectedServerId = null;
+        $this->newNodeHost = '';
+        $this->newNodeName = '';
+        $this->newNodeSshPort = 22;
+        $this->newNodeSshUser = 'root';
+        $this->newNodeRedisPort = 6379;
+        $this->newNodeSentinelPort = 26379;
+        $this->newNodeKeyPair = null;
+        $this->newNodePrivateKey = '';
         $this->sshTestResult = '';
     }
 

@@ -3,7 +3,7 @@
 namespace App\Livewire;
 
 use App\Models\RedisNode;
-use App\Services\SshService;
+use App\Services\RedisLogStreamService;
 use Livewire\Component;
 
 class RedisNodeLogs extends Component
@@ -22,35 +22,23 @@ class RedisNodeLogs extends Component
 
     public function mount(RedisNode $node)
     {
-        $this->node = $node->load(['cluster', 'server']);
+        $this->node = $node;
     }
 
     public function fetchLogs()
     {
         $this->loading = true;
-        $ssh = app(SshService::class);
+        $logService = app(RedisLogStreamService::class);
 
-        $command = match ($this->logType) {
-            'redis' => "tail -n {$this->lines} /var/log/redis/redis-server.log 2>/dev/null || echo 'Log file not found.'",
-            'sentinel' => "tail -n {$this->lines} /var/log/redis/redis-sentinel.log 2>/dev/null || echo 'Log file not found.'",
-            'systemd-redis' => "journalctl -u redis-server --no-pager -n {$this->lines} 2>/dev/null || echo 'No systemd logs found.'",
-            'systemd-sentinel' => "journalctl -u redis-sentinel --no-pager -n {$this->lines} 2>/dev/null || echo 'No systemd logs found.'",
-            default => 'echo "Unknown log type."',
+        $result = match ($this->logType) {
+            'redis' => $logService->getRedisLog($this->node, $this->lines),
+            'sentinel' => $logService->getSentinelLog($this->node, $this->lines),
+            'systemd-redis' => $logService->getSystemdRedisLog($this->node, $this->lines),
+            'systemd-sentinel' => $logService->getSystemdSentinelLog($this->node, $this->lines),
+            default => ['output' => 'Unknown log type.'],
         };
 
-        try {
-            $result = $ssh->exec(
-                $this->node,
-                $command,
-                'logs.fetch.'.$this->logType,
-                sudo: true
-            );
-
-            $this->logContent = $result['output'] ?? $result['error'] ?? 'No output.';
-        } catch (\Throwable $e) {
-            $this->logContent = 'Error fetching logs: '.$e->getMessage();
-        }
-
+        $this->logContent = $result['output'] ?? $result['error'] ?? 'No output.';
         $this->loading = false;
     }
 

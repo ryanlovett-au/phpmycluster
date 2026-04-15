@@ -2,23 +2,24 @@
 
 namespace App\Jobs;
 
+use App\Jobs\Concerns\TracksProgress;
 use App\Models\RedisCluster;
 use App\Models\RedisNode;
 use App\Services\FirewallService;
 use App\Services\RedisCliService;
 use App\Services\RedisProvisionService;
 use App\Services\SshService;
+use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class AddRedisNodeJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Batchable, Dispatchable, InteractsWithQueue, Queueable, SerializesModels, TracksProgress;
 
     public int $timeout = 1800;
 
@@ -150,42 +151,5 @@ class AddRedisNodeJob implements ShouldQueue
 
             $node->update(['status' => 'error']);
         }
-    }
-
-    protected function addStep(string $message, string $status = 'running'): void
-    {
-        $key = $this->getCacheKey();
-        $progress = Cache::get($key, ['steps' => [], 'status' => 'running']);
-
-        foreach ($progress['steps'] as &$step) {
-            if ($step['status'] === 'running') {
-                $step['status'] = 'success';
-            }
-        }
-        unset($step);
-
-        $progress['steps'][] = [
-            'message' => $message,
-            'status' => $status,
-            'time' => now()->format('H:i:s'),
-        ];
-
-        Cache::put($key, $progress, now()->addHours(2));
-    }
-
-    protected function setStatus(string $status): void
-    {
-        $key = $this->getCacheKey();
-        $progress = Cache::get($key, ['steps' => [], 'status' => 'running']);
-        $progress['status'] = $status;
-
-        $resolvedStatus = $status === 'complete' ? 'success' : 'error';
-        foreach ($progress['steps'] as &$step) {
-            if ($step['status'] === 'running') {
-                $step['status'] = $resolvedStatus;
-            }
-        }
-
-        Cache::put($key, $progress, now()->addHours(2));
     }
 }

@@ -1197,11 +1197,11 @@ it('toggles firewall panel open and closed', function () {
     $component = Livewire::actingAs($user)
         ->test(ClusterManager::class, ['cluster' => $cluster])
         ->call('toggleFirewall', $router->id)
-        ->assertSet('firewallRouterId', $router->id);
+        ->assertSet('firewallNodeId', $router->id);
 
     // Toggle off
     $component->call('toggleFirewall', $router->id)
-        ->assertSet('firewallRouterId', null);
+        ->assertSet('firewallNodeId', null);
 });
 
 // ─── reprovision() ──────────────────────────────────────────────────────────
@@ -1504,7 +1504,7 @@ it('adds a firewall rule successfully', function () {
 
     Livewire::actingAs($user)
         ->test(ClusterManager::class, ['cluster' => $cluster])
-        ->set('firewallRouterId', $router->id)
+        ->set('firewallNodeId', $router->id)
         ->set('firewallNewIp', '192.168.1.0/24')
         ->call('addFirewallRule')
         ->assertSet('actionStatus', 'success')
@@ -1518,7 +1518,7 @@ it('validates firewallNewIp is required', function () {
 
     Livewire::actingAs($user)
         ->test(ClusterManager::class, ['cluster' => $cluster])
-        ->set('firewallRouterId', $router->id)
+        ->set('firewallNodeId', $router->id)
         ->set('firewallNewIp', '')
         ->call('addFirewallRule')
         ->assertHasErrors(['firewallNewIp' => 'required']);
@@ -1536,7 +1536,7 @@ it('shows error when addFirewallRule command fails', function () {
 
     Livewire::actingAs($user)
         ->test(ClusterManager::class, ['cluster' => $cluster])
-        ->set('firewallRouterId', $router->id)
+        ->set('firewallNodeId', $router->id)
         ->set('firewallNewIp', '10.0.0.1')
         ->call('addFirewallRule')
         ->assertSet('actionStatus', 'error');
@@ -1556,7 +1556,7 @@ it('removes a firewall rule successfully', function () {
 
     Livewire::actingAs($user)
         ->test(ClusterManager::class, ['cluster' => $cluster])
-        ->set('firewallRouterId', $router->id)
+        ->set('firewallNodeId', $router->id)
         ->call('removeFirewallRule', 3)
         ->assertSet('actionStatus', 'success');
 });
@@ -1565,11 +1565,14 @@ it('does nothing when removing firewall rule without router', function () {
     $user = createAdmin();
     $cluster = MysqlCluster::factory()->online()->create();
 
+    // With firewallNodeId = null, removeFirewallRule() should return early
+    // without touching SSH or setting any action message.
     Livewire::actingAs($user)
         ->test(ClusterManager::class, ['cluster' => $cluster])
-        ->set('firewallRouterId', null)
-        ->call('removeFirewallRule', 3);
-    // Should return early without errors
+        ->set('firewallNodeId', null)
+        ->call('removeFirewallRule', 3)
+        ->assertSet('actionMessage', '')
+        ->assertSet('actionStatus', '');
 });
 
 // ─── Coverage: catch blocks and error paths ────────────────────────────────
@@ -1602,7 +1605,7 @@ it('handles loadFirewallRules exception gracefully', function () {
     Livewire::actingAs($user)
         ->test(ClusterManager::class, ['cluster' => $cluster])
         ->call('toggleFirewall', $router->id)
-        ->assertSet('firewallRouterId', $router->id)
+        ->assertSet('firewallNodeId', $router->id)
         ->assertSet('firewallRules', [])
         ->assertSet('actionStatus', 'error');
 });
@@ -1619,7 +1622,7 @@ it('handles addFirewallRule SshService exception', function () {
 
     Livewire::actingAs($user)
         ->test(ClusterManager::class, ['cluster' => $cluster])
-        ->set('firewallRouterId', $router->id)
+        ->set('firewallNodeId', $router->id)
         ->set('firewallNewIp', '10.0.0.1')
         ->call('addFirewallRule')
         ->assertSet('actionStatus', 'error');
@@ -1637,7 +1640,7 @@ it('handles removeFirewallRule SshService exception', function () {
 
     Livewire::actingAs($user)
         ->test(ClusterManager::class, ['cluster' => $cluster])
-        ->set('firewallRouterId', $router->id)
+        ->set('firewallNodeId', $router->id)
         ->call('removeFirewallRule', 5)
         ->assertSet('actionStatus', 'error');
 });
@@ -1654,7 +1657,7 @@ it('shows error when removeFirewallRule command fails', function () {
 
     Livewire::actingAs($user)
         ->test(ClusterManager::class, ['cluster' => $cluster])
-        ->set('firewallRouterId', $router->id)
+        ->set('firewallNodeId', $router->id)
         ->call('removeFirewallRule', 5)
         ->assertSet('actionStatus', 'error');
 });

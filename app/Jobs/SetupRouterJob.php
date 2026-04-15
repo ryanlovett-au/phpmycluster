@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Jobs\Concerns\TracksProgress;
 use App\Models\MysqlCluster;
 use App\Models\MysqlNode;
 use App\Services\FirewallService;
@@ -12,12 +13,11 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class SetupRouterJob implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, TracksProgress;
 
     /**
      * Router setup is quicker than DB node provisioning, but allow plenty of time.
@@ -31,6 +31,11 @@ class SetupRouterJob implements ShouldQueue
         public MysqlNode $node,
         public string $allowFrom = 'any',
     ) {}
+
+    protected function getCacheKey(): string
+    {
+        return self::progressKey($this->node->id);
+    }
 
     /**
      * Get the cache key for storing progress.
@@ -137,48 +142,5 @@ class SetupRouterJob implements ShouldQueue
 
             $node->update(['status' => 'error']);
         }
-    }
-
-    /**
-     * Add a progress step to the cache.
-     */
-    protected function addStep(string $message, string $status = 'running'): void
-    {
-        $key = self::progressKey($this->node->id);
-        $progress = Cache::get($key, ['steps' => [], 'status' => 'running']);
-
-        foreach ($progress['steps'] as &$step) {
-            if ($step['status'] === 'running') {
-                $step['status'] = 'success';
-            }
-        }
-        unset($step);
-
-        $progress['steps'][] = [
-            'message' => $message,
-            'status' => $status,
-            'time' => now()->format('H:i:s'),
-        ];
-
-        Cache::put($key, $progress, now()->addHours(2));
-    }
-
-    /**
-     * Set the overall provision status.
-     */
-    protected function setStatus(string $status): void
-    {
-        $key = self::progressKey($this->node->id);
-        $progress = Cache::get($key, ['steps' => [], 'status' => 'running']);
-        $progress['status'] = $status;
-
-        $resolvedStatus = $status === 'complete' ? 'success' : 'error';
-        foreach ($progress['steps'] as &$step) {
-            if ($step['status'] === 'running') {
-                $step['status'] = $resolvedStatus;
-            }
-        }
-
-        Cache::put($key, $progress, now()->addHours(2));
     }
 }

@@ -1,8 +1,9 @@
 <?php
 
+use App\Jobs\RefreshDbStatusJob;
 use App\Livewire\Dashboard;
 use App\Models\MysqlCluster;
-use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Bus;
 use Livewire\Livewire;
 
 it('allows an approved user to view the dashboard', function () {
@@ -30,17 +31,28 @@ it('displays cluster cards on the dashboard', function () {
         ->assertSee('My Test Cluster');
 });
 
-it('dispatches the refresh status command when refreshAll is called', function () {
-    Artisan::shouldReceive('call')
-        ->once()
-        ->with('clusters:refresh-status');
+it('dispatches a batch of refresh jobs when refreshAll is called', function () {
+    Bus::fake();
 
+    $user = createApprovedUser();
+    MysqlCluster::factory()->online()->create();
+
+    Livewire::actingAs($user)
+        ->test(Dashboard::class)
+        ->call('refreshAll')
+        ->assertSet('refreshing', true);
+
+    Bus::assertBatched(fn ($batch) => $batch->jobs->contains(fn ($job) => $job instanceof RefreshDbStatusJob));
+});
+
+it('shows a message when refreshAll is called with no active clusters', function () {
     $user = createApprovedUser();
 
     Livewire::actingAs($user)
         ->test(Dashboard::class)
         ->call('refreshAll')
-        ->assertSet('refreshMessage', 'Refresh jobs dispatched for all active clusters.');
+        ->assertSet('refreshing', false)
+        ->assertSet('refreshMessage', 'No active clusters to refresh.');
 });
 
 it('redirects guests to the login page', function () {

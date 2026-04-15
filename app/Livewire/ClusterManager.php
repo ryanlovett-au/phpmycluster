@@ -76,7 +76,7 @@ class ClusterManager extends Component
     public array $setupRouterSteps = [];
 
     // Router firewall
-    public ?int $firewallRouterId = null;
+    public ?int $firewallNodeId = null;
 
     public string $firewallNewIp = '';
 
@@ -545,14 +545,14 @@ class ClusterManager extends Component
      */
     public function toggleFirewall(int $nodeId): void
     {
-        if ($this->firewallRouterId === $nodeId) {
-            $this->firewallRouterId = null;
+        if ($this->firewallNodeId === $nodeId) {
+            $this->firewallNodeId = null;
             $this->firewallRules = [];
 
             return;
         }
 
-        $this->firewallRouterId = $nodeId;
+        $this->firewallNodeId = $nodeId;
         $this->firewallNewIp = '';
         $this->loadFirewallRules($nodeId);
     }
@@ -604,7 +604,7 @@ class ClusterManager extends Component
             'firewallNewIp' => 'required|string',
         ]);
 
-        $node = MysqlNode::findOrFail($this->firewallRouterId);
+        $node = MysqlNode::findOrFail($this->firewallNodeId);
         $sshService = app(SshService::class);
 
         try {
@@ -620,7 +620,7 @@ class ClusterManager extends Component
             if ($result['success']) {
                 $this->setMessage("Firewall rule added: {$ip} → ports 6446, 6447", 'success');
                 $this->firewallNewIp = '';
-                $this->loadFirewallRules($this->firewallRouterId);
+                $this->loadFirewallRules($this->firewallNodeId);
             } else {
                 $this->setMessage('Failed to add firewall rule: '.($result['output'] ?? 'Unknown error'), 'error');
             }
@@ -634,24 +634,24 @@ class ClusterManager extends Component
      */
     public function removeFirewallRule(int $ruleNumber): void
     {
-        if (! $this->firewallRouterId) {
+        if (! $this->firewallNodeId) {
             return;
         }
 
-        $node = MysqlNode::findOrFail($this->firewallRouterId);
+        $node = MysqlNode::findOrFail($this->firewallNodeId);
         $sshService = app(SshService::class);
 
         try {
             $result = $sshService->exec(
                 $node,
-                "yes | ufw delete {$ruleNumber} 2>&1",
+                "ufw --force delete {$ruleNumber} 2>&1",
                 'firewall.delete_rule',
                 sudo: true
             );
 
             if ($result['success']) {
                 $this->setMessage('Firewall rule removed.', 'success');
-                $this->loadFirewallRules($this->firewallRouterId);
+                $this->loadFirewallRules($this->firewallNodeId);
             } else {
                 $this->setMessage('Failed to remove rule: '.($result['output'] ?? 'Unknown error'), 'error');
             }

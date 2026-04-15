@@ -51,7 +51,7 @@
                                 <flux:button size="sm" wire:click="checkRouterStatus({{ $routerNode->id }})" icon="arrow-path">
                                     {{ __('Check Status') }}
                                 </flux:button>
-                                <flux:button size="sm" href="{{ route('node.logs', $routerNode) }}" wire:navigate icon="document-text">
+                                <flux:button size="sm" href="{{ route('mysql.node.logs', $routerNode) }}" wire:navigate icon="document-text">
                                     {{ __('Logs') }}
                                 </flux:button>
                                 @if(in_array($routerNode->status->value, ['error', 'unknown']))

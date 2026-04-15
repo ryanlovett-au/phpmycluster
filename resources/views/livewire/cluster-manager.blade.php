@@ -1,7 +1,7 @@
     <div class="flex flex-col gap-6">
         {{-- Poll for refresh batch completion --}}
         @if($refreshing)
-            <div wire:poll.1s="pollRefresh"></div>
+            <div wire:poll.2s="pollRefresh"></div>
         @endif
 
         {{-- Header --}}
@@ -33,7 +33,7 @@
         {{-- Action message --}}
         @if($actionMessage)
             <div x-data="{ show: true }" x-init="setTimeout(() => { show = false; $wire.set('actionMessage', '') }, 4000)" x-show="show" x-transition.opacity.duration.500ms>
-                <flux:callout :variant="match($actionStatus) { 'success' => 'success', 'error' => 'danger', default => 'info' }">
+                <flux:callout :variant="match($actionStatus ?? 'info') { 'success' => 'success', 'error' => 'danger', default => 'info' }">
                     <flux:callout.text>{{ $actionMessage }}</flux:callout.text>
                 </flux:callout>
             </div>
@@ -100,7 +100,7 @@
                             </div>
 
                             <div class="flex items-center gap-2">
-                                <flux:button size="sm" href="{{ route('node.logs', $node) }}" wire:navigate icon="document-text">
+                                <flux:button size="sm" href="{{ route('mysql.node.logs', $node) }}" wire:navigate icon="document-text">
                                     {{ __('Logs') }}
                                 </flux:button>
 
@@ -346,7 +346,7 @@
                                     <flux:button size="sm" wire:click="toggleFirewall({{ $routerNode->id }})" icon="shield-check">
                                         {{ __('Firewall') }}
                                     </flux:button>
-                                    <flux:button size="sm" href="{{ route('node.logs', $routerNode) }}" wire:navigate icon="document-text">
+                                    <flux:button size="sm" href="{{ route('mysql.node.logs', $routerNode) }}" wire:navigate icon="document-text">
                                         {{ __('Logs') }}
                                     </flux:button>
                                     @if(in_array($routerNode->status->value, ['error', 'unknown']))
@@ -383,7 +383,7 @@
                             @endif
 
                             {{-- Firewall management --}}
-                            @if($firewallRouterId === $routerNode->id)
+                            @if($firewallNodeId === $routerNode->id)
                                 <div class="mt-4 border-t border-neutral-200 dark:border-neutral-700" style="padding-top: 1.25rem;">
                                     <div class="flex items-center justify-between mb-3">
                                         <flux:heading size="sm">{{ __('Firewall Rules (6446 / 6447)') }}</flux:heading>

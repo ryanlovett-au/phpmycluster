@@ -1,11 +1,19 @@
     <div class="flex flex-col gap-6">
+        {{-- Poll for refresh completion --}}
+        @if($refreshing)
+            <div wire:poll.2s="pollRefresh"></div>
+        @endif
+
         <div class="flex items-center justify-between">
             <flux:heading size="xl">{{ __('Cluster Dashboard') }}</flux:heading>
             <div class="flex gap-2">
                 @if($mysqlClusters->isNotEmpty() || $redisClusters->isNotEmpty())
-                    <flux:button wire:click="refreshAll" wire:loading.attr="disabled" icon="arrow-path">
-                        <span wire:loading.remove wire:target="refreshAll">{{ __('Refresh All') }}</span>
-                        <span wire:loading wire:target="refreshAll">{{ __('Refreshing...') }}</span>
+                    <flux:button wire:click="refreshAll" :disabled="$refreshing" icon="arrow-path">
+                        @if($refreshing)
+                            {{ __('Refreshing...') }}
+                        @else
+                            {{ __('Refresh All') }}
+                        @endif
                     </flux:button>
                 @endif
             </div>
@@ -77,10 +85,22 @@
                                 </div>
                             </div>
 
-                            {{-- Node status dots --}}
-                            <div class="mb-4 flex gap-1">
-                                @foreach($cluster->nodes as $node)
-                                    <div title="{{ $node->name }}: {{ $node->status->value }}" @class([
+                            {{-- Node status dots: DB nodes + access (router) nodes --}}
+                            <div class="mb-4 flex items-center gap-1">
+                                @foreach($cluster->dbNodes as $node)
+                                    <div title="{{ $node->name }} (DB): {{ $node->status->value }}" @class([
+                                        'size-3 rounded-full',
+                                        'bg-green-500' => $node->status->value === 'online',
+                                        'bg-yellow-500' => $node->status->value === 'recovering',
+                                        'bg-red-500' => in_array($node->status->value, ['offline', 'error', 'unreachable']),
+                                        'bg-zinc-400' => $node->status->value === 'unknown',
+                                    ])></div>
+                                @endforeach
+                                @if($cluster->dbNodes->isNotEmpty() && $cluster->accessNodes->isNotEmpty())
+                                    <flux:icon.plus variant="mini" class="size-3 text-zinc-400" />
+                                @endif
+                                @foreach($cluster->accessNodes as $node)
+                                    <div title="{{ $node->name }} (Router): {{ $node->status->value }}" @class([
                                         'size-3 rounded-full',
                                         'bg-green-500' => $node->status->value === 'online',
                                         'bg-yellow-500' => $node->status->value === 'recovering',

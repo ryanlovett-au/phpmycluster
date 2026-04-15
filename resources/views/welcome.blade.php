@@ -344,7 +344,7 @@
                 <div class="mx-auto max-w-4xl text-center">
                     <p class="mb-8 text-sm font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Built With</p>
                     <div class="flex flex-wrap items-center justify-center gap-6">
-                        @foreach(['Laravel 13', 'Livewire 3', 'Flux UI', 'MySQL Shell AdminAPI', 'Redis Sentinel', 'Tailwind CSS', 'phpseclib'] as $tech)
+                        @foreach(['Laravel 13', 'Livewire 4', 'Flux UI', 'MySQL Shell AdminAPI', 'Redis Sentinel', 'Tailwind CSS', 'phpseclib'] as $tech)
                             <span class="rounded-full border border-zinc-200 bg-zinc-50 px-4 py-2 text-sm font-medium text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">{{ $tech }}</span>
                         @endforeach
                     </div>

@@ -9,7 +9,7 @@
   Deploy, monitor, and manage highly available database and cache clusters from a single control panel — all over SSH.
 </p>
 
-Built with Laravel 13, Livewire 3, Flux UI, and Tailwind CSS.
+Built with Laravel 13, Livewire 4, Flux UI, and Tailwind CSS.
 
 ## Screenshots
 
@@ -204,7 +204,7 @@ PHPMyCluster runs on a **separate control node** and manages your cluster infras
 | Component | Technology |
 |-----------|-----------|
 | Backend | Laravel 13 |
-| Frontend | Livewire 3 + Flux UI |
+| Frontend | Livewire 4 + Flux UI |
 | Styling | Tailwind CSS v4 |
 | Database | SQLite (app) / MySQL 8.4 (clusters) / Redis (cache clusters) |
 | SSH | phpseclib3 |

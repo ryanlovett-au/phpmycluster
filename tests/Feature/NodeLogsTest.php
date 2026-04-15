@@ -12,7 +12,7 @@ it('allows an approved user to view node logs', function () {
     $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $this->actingAs($user)
-        ->get(route('node.logs', $node))
+        ->get(route('mysql.node.logs', $node))
         ->assertOk();
 });
 

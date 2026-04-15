@@ -246,7 +246,7 @@ class RedisSetupWizard extends Component
     /**
      * Dispatch the provisioning job to the queue.
      */
-    public function startProvision()
+    public function provision()
     {
         $this->provisioning = true;
         $this->provisionSteps = [];
