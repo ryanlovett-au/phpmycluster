@@ -6,6 +6,7 @@ use App\Enums\MysqlNodeRole;
 use App\Enums\MysqlNodeStatus;
 use App\Models\MysqlCluster;
 use App\Models\MysqlNode;
+use App\Models\Server;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -18,18 +19,14 @@ class MysqlNodeFactory extends Factory
     public function definition(): array
     {
         return [
+            'server_id' => Server::factory(),
             'cluster_id' => MysqlCluster::factory(),
             'name' => 'node-'.fake()->numberBetween(1, 99),
-            'host' => fake()->ipv4(),
-            'ssh_port' => 22,
-            'ssh_user' => 'root',
-            'ssh_private_key_encrypted' => 'test-key-content',
-            'ssh_public_key' => 'ssh-ed25519 AAAA testkey',
             'mysql_port' => 3306,
             'mysql_x_port' => 33060,
             'role' => MysqlNodeRole::Pending,
             'status' => MysqlNodeStatus::Unknown,
-            'server_id' => fake()->numberBetween(1, 999),
+            'mysql_server_id' => fake()->numberBetween(1, 999),
             'mysql_installed' => false,
             'mysql_shell_installed' => false,
             'mysql_router_installed' => false,

@@ -215,7 +215,7 @@ trait ProvisionesNode
         ];
 
         try {
-            $ssh = $sshService->connect($node);
+            $ssh = $sshService->connect($node->getServer());
 
             // Detect OS
             $osOutput = trim($ssh->exec('cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d \'"\' '));

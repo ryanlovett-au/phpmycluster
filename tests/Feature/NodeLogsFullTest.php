@@ -3,6 +3,7 @@
 use App\Livewire\NodeLogs;
 use App\Models\MysqlCluster;
 use App\Models\MysqlNode;
+use App\Models\Server;
 use App\Services\LogStreamService;
 use Livewire\Livewire;
 
@@ -11,10 +12,11 @@ use Livewire\Livewire;
 it('renders with node data', function () {
     $user = createAdmin();
     $cluster = MysqlCluster::factory()->online()->create();
+    $server = Server::factory()->create(['host' => '10.0.0.1']);
     $node = MysqlNode::factory()->primary()->create([
+        'server_id' => $server->id,
         'cluster_id' => $cluster->id,
         'name' => 'db-primary-node',
-        'host' => '10.0.0.1',
     ]);
 
     Livewire::actingAs($user)

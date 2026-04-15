@@ -58,7 +58,7 @@ class RefreshDbStatusJob implements ShouldQueue
                     $topology = $result['data']['defaultReplicaSet']['topology'] ?? [];
                     foreach ($topology as $address => $memberData) {
                         $host = explode(':', $address)[0];
-                        $dbNode = $cluster->nodes()->where('host', $host)->first();
+                        $dbNode = $cluster->nodes()->whereHas('server', fn ($q) => $q->where('host', $host))->first();
                         if ($dbNode) {
                             $memberStatus = strtolower($memberData['status'] ?? 'unknown');
                             $role = strtolower($memberData['memberRole'] ?? 'secondary');

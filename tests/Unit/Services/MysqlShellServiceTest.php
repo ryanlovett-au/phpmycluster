@@ -2,6 +2,7 @@
 
 use App\Models\MysqlCluster;
 use App\Models\MysqlNode;
+use App\Models\Server;
 use App\Services\MysqlShellService;
 use App\Services\SshService;
 
@@ -497,7 +498,8 @@ it('createCluster uses XCOM communication stack with ipAllowlist', function () {
 it('addInstance uses MYSQL stack without ipAllowlist', function () {
     $cluster = MysqlCluster::factory()->online()->create(['communication_stack' => 'MYSQL']);
     $primary = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id, 'mysql_port' => 3306]);
-    $newNode = MysqlNode::factory()->secondary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.2', 'mysql_port' => 3306]);
+    $newNodeServer = Server::factory()->create(['host' => '10.0.0.2']);
+    $newNode = MysqlNode::factory()->secondary()->create(['server_id' => $newNodeServer->id, 'cluster_id' => $cluster->id, 'mysql_port' => 3306]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
@@ -525,7 +527,8 @@ it('addInstance uses MYSQL stack without ipAllowlist', function () {
 it('addInstance uses XCOM stack with ipAllowlist', function () {
     $cluster = MysqlCluster::factory()->online()->create(['communication_stack' => 'XCOM']);
     $primary = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id, 'mysql_port' => 3306]);
-    $newNode = MysqlNode::factory()->secondary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.2', 'mysql_port' => 3306]);
+    $newNodeServer = Server::factory()->create(['host' => '10.0.0.2']);
+    $newNode = MysqlNode::factory()->secondary()->create(['server_id' => $newNodeServer->id, 'cluster_id' => $cluster->id, 'mysql_port' => 3306]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
@@ -549,7 +552,8 @@ it('addInstance uses XCOM stack with ipAllowlist', function () {
 it('removeInstance sends correct command without force', function () {
     $cluster = MysqlCluster::factory()->online()->create();
     $primary = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id, 'mysql_port' => 3306]);
-    $target = MysqlNode::factory()->secondary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.3', 'mysql_port' => 3306]);
+    $targetServer = Server::factory()->create(['host' => '10.0.0.3']);
+    $target = MysqlNode::factory()->secondary()->create(['server_id' => $targetServer->id, 'cluster_id' => $cluster->id, 'mysql_port' => 3306]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
@@ -577,7 +581,8 @@ it('removeInstance sends correct command without force', function () {
 it('removeInstance sends correct command with force', function () {
     $cluster = MysqlCluster::factory()->online()->create();
     $primary = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id, 'mysql_port' => 3306]);
-    $target = MysqlNode::factory()->secondary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.3', 'mysql_port' => 3306]);
+    $targetServer = Server::factory()->create(['host' => '10.0.0.3']);
+    $target = MysqlNode::factory()->secondary()->create(['server_id' => $targetServer->id, 'cluster_id' => $cluster->id, 'mysql_port' => 3306]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
@@ -601,7 +606,8 @@ it('removeInstance sends correct command with force', function () {
 it('rejoinInstance sends correct command', function () {
     $cluster = MysqlCluster::factory()->online()->create();
     $primary = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id, 'mysql_port' => 3306]);
-    $target = MysqlNode::factory()->secondary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.4', 'mysql_port' => 3306]);
+    $targetServer = Server::factory()->create(['host' => '10.0.0.4']);
+    $target = MysqlNode::factory()->secondary()->create(['server_id' => $targetServer->id, 'cluster_id' => $cluster->id, 'mysql_port' => 3306]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')

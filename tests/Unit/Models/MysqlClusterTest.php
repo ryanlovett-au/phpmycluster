@@ -5,6 +5,7 @@ use App\Enums\MysqlNodeRole;
 use App\Models\AuditLog;
 use App\Models\MysqlCluster;
 use App\Models\MysqlNode;
+use App\Models\Server;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -108,9 +109,12 @@ it('returns null from reachableDbNode() when no DB nodes exist', function () {
 
 it('builds comma-separated IP allowlist from DB nodes', function () {
     $cluster = MysqlCluster::factory()->create();
-    MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.1']);
-    MysqlNode::factory()->secondary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.2']);
-    MysqlNode::factory()->access()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.3']);
+    $s1 = Server::factory()->create(['host' => '10.0.0.1']);
+    $s2 = Server::factory()->create(['host' => '10.0.0.2']);
+    $s3 = Server::factory()->create(['host' => '10.0.0.3']);
+    MysqlNode::factory()->primary()->create(['server_id' => $s1->id, 'cluster_id' => $cluster->id]);
+    MysqlNode::factory()->secondary()->create(['server_id' => $s2->id, 'cluster_id' => $cluster->id]);
+    MysqlNode::factory()->access()->create(['server_id' => $s3->id, 'cluster_id' => $cluster->id]);
 
     $result = $cluster->buildIpAllowlist();
 

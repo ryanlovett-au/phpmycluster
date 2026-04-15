@@ -3,6 +3,7 @@
 use App\Models\AuditLog;
 use App\Models\MysqlCluster;
 use App\Models\MysqlNode;
+use App\Models\Server;
 use App\Services\SshService;
 use phpseclib3\Net\SFTP;
 use phpseclib3\Net\SSH2;
@@ -57,11 +58,14 @@ it('sanitises AdminPassword from commands', function () {
 
 it('connects to a node via mocked SSH2', function () {
     $cluster = MysqlCluster::factory()->online()->create();
-    $node = MysqlNode::factory()->primary()->create([
-        'cluster_id' => $cluster->id,
+    $server = Server::factory()->create([
         'host' => '10.0.0.1',
         'ssh_port' => 22,
         'ssh_user' => 'root',
+    ]);
+    $node = MysqlNode::factory()->primary()->create([
+        'server_id' => $server->id,
+        'cluster_id' => $cluster->id,
     ]);
 
     $sshMock = Mockery::mock(SSH2::class);
@@ -69,7 +73,7 @@ it('connects to a node via mocked SSH2', function () {
     $service = Mockery::mock(SshService::class)->makePartial();
     $service->shouldReceive('connect')->andReturn($sshMock);
 
-    $result = $service->connect($node);
+    $result = $service->connect($node->server);
 
     expect($result)->toBe($sshMock);
 });
@@ -184,9 +188,9 @@ it('testConnection returns success with hostname and os', function () {
         ->andReturn('Ubuntu 24.04 LTS');
 
     $service = Mockery::mock(SshService::class)->makePartial();
-    $service->shouldReceive('connect')->with($node)->once()->andReturn($sshMock);
+    $service->shouldReceive('connect')->with($node->server)->once()->andReturn($sshMock);
 
-    $result = $service->testConnection($node);
+    $result = $service->testConnection($node->server);
 
     expect($result['success'])->toBeTrue()
         ->and($result['hostname'])->toBe('db-node-1')
@@ -201,11 +205,11 @@ it('testConnection returns failure on exception', function () {
 
     $service = Mockery::mock(SshService::class)->makePartial();
     $service->shouldReceive('connect')
-        ->with($node)
+        ->with($node->server)
         ->once()
         ->andThrow(new RuntimeException('Connection timed out'));
 
-    $result = $service->testConnection($node);
+    $result = $service->testConnection($node->server);
 
     expect($result['success'])->toBeFalse()
         ->and($result['error'])->toContain('Connection timed out');
@@ -223,8 +227,10 @@ it('testConnectionDirect returns failure when private key is invalid', function 
 
 it('testNodeConnectivity returns port open status', function () {
     $cluster = MysqlCluster::factory()->online()->create();
-    $source = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.1']);
-    $target = MysqlNode::factory()->secondary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.2']);
+    $sourceServer = Server::factory()->create(['host' => '10.0.0.1']);
+    $source = MysqlNode::factory()->primary()->create(['server_id' => $sourceServer->id, 'cluster_id' => $cluster->id]);
+    $targetServer = Server::factory()->create(['host' => '10.0.0.2']);
+    $target = MysqlNode::factory()->secondary()->create(['server_id' => $targetServer->id, 'cluster_id' => $cluster->id]);
 
     $service = Mockery::mock(SshService::class)->makePartial();
     $service->shouldReceive('exec')
@@ -250,8 +256,10 @@ it('testNodeConnectivity returns port open status', function () {
 
 it('testNodeConnectivity returns port closed status', function () {
     $cluster = MysqlCluster::factory()->online()->create();
-    $source = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.1']);
-    $target = MysqlNode::factory()->secondary()->create(['cluster_id' => $cluster->id, 'host' => '10.0.0.2']);
+    $sourceServer = Server::factory()->create(['host' => '10.0.0.1']);
+    $source = MysqlNode::factory()->primary()->create(['server_id' => $sourceServer->id, 'cluster_id' => $cluster->id]);
+    $targetServer = Server::factory()->create(['host' => '10.0.0.2']);
+    $target = MysqlNode::factory()->secondary()->create(['server_id' => $targetServer->id, 'cluster_id' => $cluster->id]);
 
     $service = Mockery::mock(SshService::class)->makePartial();
     $service->shouldReceive('exec')
@@ -279,7 +287,7 @@ it('uploadFile calls connectSftp and puts content', function () {
         ->andReturn(true);
 
     $service = Mockery::mock(SshService::class)->makePartial();
-    $service->shouldReceive('connectSftp')->with($node)->once()->andReturn($sftpMock);
+    $service->shouldReceive('connectSftp')->with($node->getServer())->once()->andReturn($sftpMock);
 
     $result = $service->uploadFile($node, '/tmp/test.cnf', 'config content');
 
@@ -297,7 +305,7 @@ it('uploadFile returns false when sftp put fails', function () {
         ->andReturn(false);
 
     $service = Mockery::mock(SshService::class)->makePartial();
-    $service->shouldReceive('connectSftp')->with($node)->once()->andReturn($sftpMock);
+    $service->shouldReceive('connectSftp')->with($node->getServer())->once()->andReturn($sftpMock);
 
     $result = $service->uploadFile($node, '/remote/path.txt', 'data');
 
@@ -311,9 +319,9 @@ it('connectSftp returns SFTP instance via mocked partial', function () {
     $sftpMock = Mockery::mock(SFTP::class);
 
     $service = Mockery::mock(SshService::class)->makePartial();
-    $service->shouldReceive('connectSftp')->with($node)->once()->andReturn($sftpMock);
+    $service->shouldReceive('connectSftp')->with($node->getServer())->once()->andReturn($sftpMock);
 
-    $result = $service->connectSftp($node);
+    $result = $service->connectSftp($node->getServer());
 
     expect($result)->toBe($sftpMock);
 });

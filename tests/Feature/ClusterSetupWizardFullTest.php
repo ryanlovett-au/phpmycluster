@@ -4,6 +4,7 @@ use App\Jobs\ProvisionClusterJob;
 use App\Livewire\ClusterSetupWizard;
 use App\Models\MysqlCluster;
 use App\Models\MysqlNode;
+use App\Models\Server;
 use App\Services\SshService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
@@ -50,13 +51,16 @@ it('loads existing cluster data in reprovision mode', function () {
         'communication_stack' => 'MYSQL',
         'cluster_admin_user' => 'clusteradmin',
     ]);
-    $node = MysqlNode::factory()->create([
-        'cluster_id' => $cluster->id,
-        'name' => 'node-1',
+    $server = Server::factory()->create([
         'host' => '10.0.0.1',
         'ssh_port' => 22,
         'ssh_user' => 'root',
         'ssh_private_key_encrypted' => '', // empty key = sshKeyMissing
+    ]);
+    $node = MysqlNode::factory()->create([
+        'server_id' => $server->id,
+        'cluster_id' => $cluster->id,
+        'name' => 'node-1',
     ]);
 
     Livewire::actingAs($user)
@@ -75,10 +79,13 @@ it('skips to step 4 when SSH key works in reprovision mode', function () {
         'name' => 'working-cluster',
         'cluster_admin_user' => 'clusteradmin',
     ]);
-    $node = MysqlNode::factory()->create([
-        'cluster_id' => $cluster->id,
+    $server = Server::factory()->create([
         'host' => '10.0.0.1',
         'ssh_private_key_encrypted' => 'valid-key-content',
+    ]);
+    $node = MysqlNode::factory()->create([
+        'server_id' => $server->id,
+        'cluster_id' => $cluster->id,
     ]);
 
     $mock = Mockery::mock(SshService::class);
@@ -100,10 +107,13 @@ it('sets sshKeyAuthFailed when SSH key auth fails in reprovision', function () {
         'name' => 'auth-fail-cluster',
         'cluster_admin_user' => 'clusteradmin',
     ]);
-    $node = MysqlNode::factory()->create([
-        'cluster_id' => $cluster->id,
+    $server = Server::factory()->create([
         'host' => '10.0.0.2',
         'ssh_private_key_encrypted' => 'bad-key-content',
+    ]);
+    $node = MysqlNode::factory()->create([
+        'server_id' => $server->id,
+        'cluster_id' => $cluster->id,
     ]);
 
     $mock = Mockery::mock(SshService::class);
@@ -126,10 +136,13 @@ it('handles SSH test exception during reprovision mount', function () {
         'name' => 'exception-cluster',
         'cluster_admin_user' => 'clusteradmin',
     ]);
-    $node = MysqlNode::factory()->create([
-        'cluster_id' => $cluster->id,
+    $server = Server::factory()->create([
         'host' => '10.0.0.3',
         'ssh_private_key_encrypted' => 'some-key',
+    ]);
+    $node = MysqlNode::factory()->create([
+        'server_id' => $server->id,
+        'cluster_id' => $cluster->id,
     ]);
 
     $mock = Mockery::mock(SshService::class);
@@ -429,7 +442,7 @@ it('creates a new cluster and node when provisioning', function () {
 
     $node = $cluster->nodes()->first();
     expect($node)->not->toBeNull();
-    expect($node->host)->toBe('10.0.0.1');
+    expect($node->server->host)->toBe('10.0.0.1');
 });
 
 it('validates mysql root password is required for new clusters', function () {
@@ -460,7 +473,7 @@ it('provisions with generated key', function () {
 
     $cluster = MysqlCluster::where('name', 'gen-key-cluster')->first();
     $node = $cluster->nodes()->first();
-    expect($node->ssh_public_key)->toBe('gen-pub');
+    expect($node->server->ssh_public_key)->toBe('gen-pub');
 });
 
 it('uses custom seed name when provided', function () {
@@ -493,9 +506,10 @@ it('updates existing records when reprovisioning', function () {
         'name' => 'reprov-cluster',
         'cluster_admin_user' => 'clusteradmin',
     ]);
+    $server = Server::factory()->create(['host' => '10.0.0.1']);
     $node = MysqlNode::factory()->primary()->create([
+        'server_id' => $server->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.1',
         'mysql_root_password_encrypted' => 'old-root-pass',
     ]);
 
@@ -517,7 +531,7 @@ it('updates existing records when reprovisioning', function () {
     Queue::assertPushed(ProvisionClusterJob::class);
 
     $node->refresh();
-    expect($node->host)->toBe('10.0.0.2');
+    expect($node->server->host)->toBe('10.0.0.2');
     expect($cluster->fresh()->status->value)->toBe('pending');
 });
 
@@ -528,9 +542,10 @@ it('uses stored root password when empty in reprovision', function () {
         'name' => 'stored-pass-cluster',
         'cluster_admin_user' => 'clusteradmin',
     ]);
+    $server = Server::factory()->create(['host' => '10.0.0.1']);
     $node = MysqlNode::factory()->primary()->create([
+        'server_id' => $server->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.1',
         'mysql_root_password_encrypted' => 'stored-pass',
     ]);
 
@@ -557,11 +572,14 @@ it('preserves SSH key if not provided in reprovision', function () {
         'name' => 'preserve-key-cluster',
         'cluster_admin_user' => 'clusteradmin',
     ]);
-    $node = MysqlNode::factory()->create([
-        'cluster_id' => $cluster->id,
+    $server = Server::factory()->create([
         'host' => '10.0.0.1',
         'ssh_private_key_encrypted' => 'original-key',
         'ssh_public_key' => 'original-pub',
+    ]);
+    $node = MysqlNode::factory()->create([
+        'server_id' => $server->id,
+        'cluster_id' => $cluster->id,
     ]);
 
     $mock = Mockery::mock(SshService::class);
@@ -579,8 +597,8 @@ it('preserves SSH key if not provided in reprovision', function () {
 
     $node->refresh();
     // The original key should be preserved since no new key was provided
-    expect($node->ssh_private_key_encrypted)->toBe('original-key');
-    expect($node->ssh_public_key)->toBe('original-pub');
+    expect($node->server->ssh_private_key_encrypted)->toBe('original-key');
+    expect($node->server->ssh_public_key)->toBe('original-pub');
 });
 
 it('uses stored root password for reprovision when empty', function () {
@@ -591,10 +609,13 @@ it('uses stored root password for reprovision when empty', function () {
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
     ]);
-    $node = MysqlNode::factory()->create([
-        'cluster_id' => $cluster->id,
+    $server = Server::factory()->create([
         'host' => '10.0.0.1',
         'ssh_private_key_encrypted' => 'key',
+    ]);
+    $node = MysqlNode::factory()->create([
+        'server_id' => $server->id,
+        'cluster_id' => $cluster->id,
         'mysql_root_password_encrypted' => 'stored-root-pass',
     ]);
 
@@ -723,9 +744,10 @@ it('allows the same cluster name in reprovision mode', function () {
         'name' => 'existing-cluster',
         'cluster_admin_user' => 'clusteradmin',
     ]);
+    $server = Server::factory()->create(['ssh_private_key_encrypted' => '']);
     $node = MysqlNode::factory()->create([
+        'server_id' => $server->id,
         'cluster_id' => $cluster->id,
-        'ssh_private_key_encrypted' => '',
     ]);
 
     Livewire::actingAs($user)
@@ -746,9 +768,10 @@ it('loads mysql root password from node in reprovision mode', function () {
         'name' => 'load-pass-cluster',
         'cluster_admin_user' => 'clusteradmin',
     ]);
+    $server = Server::factory()->create(['ssh_private_key_encrypted' => '']);
     $node = MysqlNode::factory()->create([
+        'server_id' => $server->id,
         'cluster_id' => $cluster->id,
-        'ssh_private_key_encrypted' => '',
         'mysql_root_password_encrypted' => 'stored-mysql-root',
     ]);
 
@@ -765,13 +788,16 @@ it('loads SSH and mysql port settings from existing node', function () {
         'name' => 'ports-cluster',
         'cluster_admin_user' => 'clusteradmin',
     ]);
-    $node = MysqlNode::factory()->create([
-        'cluster_id' => $cluster->id,
+    $server = Server::factory()->create([
         'host' => '10.0.0.99',
         'ssh_port' => 2222,
         'ssh_user' => 'deploy',
-        'mysql_port' => 3307,
         'ssh_private_key_encrypted' => '',
+    ]);
+    $node = MysqlNode::factory()->create([
+        'server_id' => $server->id,
+        'cluster_id' => $cluster->id,
+        'mysql_port' => 3307,
     ]);
 
     Livewire::actingAs($user)

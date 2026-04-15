@@ -47,7 +47,7 @@ it('sets up a router with a provided private key', function () {
         ->assertSet('showAddRouter', false);
 
     Queue::assertPushed(SetupRouterJob::class);
-    expect(MysqlNode::where('host', '10.0.0.50')->exists())->toBeTrue();
+    expect(MysqlNode::whereHas('server', fn ($q) => $q->where('host', '10.0.0.50'))->exists())->toBeTrue();
 });
 
 it('handles exception during router node creation', function () {

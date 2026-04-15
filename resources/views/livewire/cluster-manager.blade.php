@@ -88,7 +88,7 @@
                                             <flux:icon.pencil-square variant="mini" class="ml-1 inline size-3.5 text-zinc-400 opacity-0 group-hover:opacity-100" />
                                         </flux:heading>
                                     @endif
-                                    <flux:text class="text-xs">{{ $node->host }}:{{ $node->mysql_port }}</flux:text>
+                                    <flux:text class="text-xs">{{ $node->server->host }}:{{ $node->mysql_port }}</flux:text>
                                 </div>
                                 <flux:badge size="sm" :color="match($node->role->value) {
                                     'primary' => 'purple',
@@ -327,7 +327,7 @@
                                                 <flux:icon.pencil-square variant="mini" class="ml-1 inline size-3.5 text-zinc-400 opacity-0 group-hover:opacity-100" />
                                             </flux:heading>
                                         @endif
-                                        <flux:text class="text-xs">{{ $routerNode->host }}</flux:text>
+                                        <flux:text class="text-xs">{{ $routerNode->server->host }}</flux:text>
                                     </div>
                                     <flux:badge size="sm" color="orange">{{ __('Router') }}</flux:badge>
                                     <flux:text class="text-xs">{{ ucfirst($routerNode->status->value) }}</flux:text>
@@ -364,11 +364,11 @@
                                 <div class="mt-4 grid grid-cols-2 gap-4">
                                     <div>
                                         <flux:text class="text-xs">{{ __('Read/Write') }}</flux:text>
-                                        <p class="font-mono text-xs">{{ $routerNode->host }}:6446</p>
+                                        <p class="font-mono text-xs">{{ $routerNode->server->host }}:6446</p>
                                     </div>
                                     <div>
                                         <flux:text class="text-xs">{{ __('Read Only') }}</flux:text>
-                                        <p class="font-mono text-xs">{{ $routerNode->host }}:6447</p>
+                                        <p class="font-mono text-xs">{{ $routerNode->server->host }}:6447</p>
                                     </div>
                                 </div>
                             @endif

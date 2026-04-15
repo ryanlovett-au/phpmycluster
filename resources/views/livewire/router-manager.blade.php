@@ -42,7 +42,7 @@
                                             <flux:icon.pencil-square variant="mini" class="ml-1 inline size-3.5 text-zinc-400 opacity-0 group-hover:opacity-100" />
                                         </flux:heading>
                                     @endif
-                                    <flux:text class="text-xs">{{ $routerNode->host }}</flux:text>
+                                    <flux:text class="text-xs">{{ $routerNode->server->host }}</flux:text>
                                 </div>
                                 <flux:badge color="orange">{{ __('Router') }}</flux:badge>
                                 <flux:text class="text-xs">{{ ucfirst($routerNode->status->value) }}</flux:text>

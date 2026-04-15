@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Jobs\SetupRouterJob;
 use App\Models\MysqlCluster;
 use App\Models\MysqlNode;
+use App\Models\Server;
 use App\Services\MysqlProvisionService;
 use App\Services\SshService;
 use Illuminate\Support\Facades\Cache;
@@ -80,14 +81,19 @@ class RouterManager extends Component
             : '';
 
         try {
-            $node = MysqlNode::create([
-                'cluster_id' => $this->cluster->id,
-                'name' => $this->routerName ?: "router-{$this->routerHost}",
+            $server = Server::create([
+                'name' => $this->routerName ?: "server-{$this->routerHost}",
                 'host' => $this->routerHost,
                 'ssh_port' => $this->routerSshPort,
                 'ssh_user' => $this->routerSshUser,
                 'ssh_private_key_encrypted' => $privateKey,
                 'ssh_public_key' => $publicKey,
+            ]);
+
+            $node = MysqlNode::create([
+                'server_id' => $server->id,
+                'cluster_id' => $this->cluster->id,
+                'name' => $this->routerName ?: "router-{$this->routerHost}",
                 'role' => 'access',
                 'status' => 'unknown',
             ]);

@@ -5,6 +5,7 @@ use App\Enums\MysqlNodeStatus;
 use App\Models\AuditLog;
 use App\Models\MysqlCluster;
 use App\Models\MysqlNode;
+use App\Models\Server;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -70,20 +71,22 @@ it('returns false from isAccessNode() for primary role', function () {
 
 it('returns correct mysqlsh URI with default user', function () {
     $cluster = MysqlCluster::factory()->make(['cluster_admin_user' => 'clusteradmin']);
+    $server = Server::factory()->make(['host' => '10.0.0.1']);
     $node = MysqlNode::factory()->make([
-        'host' => '10.0.0.1',
         'mysql_port' => 3306,
     ]);
     $node->setRelation('cluster', $cluster);
+    $node->setRelation('server', $server);
 
     expect($node->getMysqlshUri())->toBe('clusteradmin@10.0.0.1:3306');
 });
 
 it('returns correct mysqlsh URI with custom user', function () {
+    $server = Server::factory()->make(['host' => '10.0.0.5']);
     $node = MysqlNode::factory()->make([
-        'host' => '10.0.0.5',
         'mysql_port' => 3307,
     ]);
+    $node->setRelation('server', $server);
 
     expect($node->getMysqlshUri('root'))->toBe('root@10.0.0.5:3307');
 });
@@ -100,13 +103,13 @@ it('casts status to MysqlNodeStatus enum', function () {
     expect($node->status)->toBe(MysqlNodeStatus::Online);
 });
 
-it('casts ssh_private_key_encrypted as encrypted', function () {
-    $node = MysqlNode::factory()->create(['ssh_private_key_encrypted' => 'my-private-key']);
+it('casts ssh_private_key_encrypted as encrypted on server', function () {
+    $server = Server::factory()->create(['ssh_private_key_encrypted' => 'my-private-key']);
 
-    $rawValue = DB::table('nodes')->where('id', $node->id)->value('ssh_private_key_encrypted');
+    $rawValue = DB::table('servers')->where('id', $server->id)->value('ssh_private_key_encrypted');
 
     expect($rawValue)->not->toBe('my-private-key')
-        ->and($node->ssh_private_key_encrypted)->toBe('my-private-key');
+        ->and($server->ssh_private_key_encrypted)->toBe('my-private-key');
 });
 
 it('casts mysql_root_password_encrypted as encrypted', function () {
@@ -137,12 +140,12 @@ it('casts boolean fields correctly', function () {
         ->and($node->mysql_configured)->toBeBool();
 });
 
-it('hides ssh_private_key_encrypted from serialisation', function () {
-    $node = MysqlNode::factory()->primary()->create([
+it('hides ssh_private_key_encrypted from serialisation on server', function () {
+    $server = Server::factory()->create([
         'ssh_private_key_encrypted' => 'secret-key-data',
     ]);
 
-    $array = $node->toArray();
+    $array = $server->toArray();
 
     expect($array)->not->toHaveKey('ssh_private_key_encrypted');
 });

@@ -673,7 +673,7 @@ it('adds a node and dispatches the add node job', function () {
     Queue::fake();
     $user = createAdmin();
     $cluster = MysqlCluster::factory()->online()->create();
-    MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id, 'server_id' => 1]);
+    MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id, 'mysql_server_id' => 1]);
 
     Livewire::actingAs($user)
         ->test(ClusterManager::class, ['cluster' => $cluster])
@@ -686,16 +686,16 @@ it('adds a node and dispatches the add node job', function () {
 
     Queue::assertPushed(AddNodeJob::class);
 
-    $newNode = MysqlNode::where('host', '10.0.0.5')->first();
+    $newNode = MysqlNode::whereHas('server', fn ($q) => $q->where('host', '10.0.0.5'))->first();
     expect($newNode)->not->toBeNull();
-    expect($newNode->server_id)->toBe(2);
+    expect($newNode->mysql_server_id)->toBe(2);
 });
 
 it('adds a node with generated key', function () {
     Queue::fake();
     $user = createAdmin();
     $cluster = MysqlCluster::factory()->online()->create();
-    MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id, 'server_id' => 1]);
+    MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id, 'mysql_server_id' => 1]);
 
     Livewire::actingAs($user)
         ->test(ClusterManager::class, ['cluster' => $cluster])
@@ -707,9 +707,9 @@ it('adds a node with generated key', function () {
 
     Queue::assertPushed(AddNodeJob::class);
 
-    $newNode = MysqlNode::where('host', '10.0.0.6')->first();
+    $newNode = MysqlNode::whereHas('server', fn ($q) => $q->where('host', '10.0.0.6'))->first();
     expect($newNode)->not->toBeNull();
-    expect($newNode->ssh_public_key)->toBe('gen-pub');
+    expect($newNode->server->ssh_public_key)->toBe('gen-pub');
 });
 
 it('uses custom node name when provided in addNode', function () {
@@ -726,7 +726,7 @@ it('uses custom node name when provided in addNode', function () {
         ->call('addNode')
         ->assertSet('addingNode', true);
 
-    $newNode = MysqlNode::where('host', '10.0.0.7')->first();
+    $newNode = MysqlNode::whereHas('server', fn ($q) => $q->where('host', '10.0.0.7'))->first();
     expect($newNode->name)->toBe('my-custom-node');
 });
 
@@ -746,7 +746,7 @@ it('shows error when addNode throws exception', function () {
         ->call('addNode');
 
     // Verify the node was created (no error expected with valid inputs)
-    $node = MysqlNode::where('host', '10.0.0.8')->first();
+    $node = MysqlNode::whereHas('server', fn ($q) => $q->where('host', '10.0.0.8'))->first();
     expect($node)->not->toBeNull();
 });
 
@@ -779,7 +779,7 @@ it('sets up a router and dispatches the setup router job', function () {
 
     Queue::assertPushed(SetupRouterJob::class);
 
-    $routerNode = MysqlNode::where('host', '10.0.0.10')->first();
+    $routerNode = MysqlNode::whereHas('server', fn ($q) => $q->where('host', '10.0.0.10'))->first();
     expect($routerNode)->not->toBeNull();
     expect($routerNode->role->value)->toBe('access');
 });
@@ -797,8 +797,8 @@ it('sets up a router with generated key', function () {
         ->call('setupRouter')
         ->assertSet('settingUpRouter', true);
 
-    $routerNode = MysqlNode::where('host', '10.0.0.11')->first();
-    expect($routerNode->ssh_public_key)->toBe('router-pub');
+    $routerNode = MysqlNode::whereHas('server', fn ($q) => $q->where('host', '10.0.0.11'))->first();
+    expect($routerNode->server->ssh_public_key)->toBe('router-pub');
 });
 
 it('uses custom router name when provided', function () {
@@ -815,7 +815,7 @@ it('uses custom router name when provided', function () {
         ->call('setupRouter')
         ->assertSet('settingUpRouter', true);
 
-    $routerNode = MysqlNode::where('host', '10.0.0.12')->first();
+    $routerNode = MysqlNode::whereHas('server', fn ($q) => $q->where('host', '10.0.0.12'))->first();
     expect($routerNode->name)->toBe('my-router');
 });
 
@@ -832,7 +832,7 @@ it('sets up a router with existing key mode', function () {
         ->call('setupRouter')
         ->assertSet('settingUpRouter', true);
 
-    $routerNode = MysqlNode::where('host', '10.0.0.13')->first();
+    $routerNode = MysqlNode::whereHas('server', fn ($q) => $q->where('host', '10.0.0.13'))->first();
     expect($routerNode)->not->toBeNull();
 });
 

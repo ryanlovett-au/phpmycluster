@@ -2,7 +2,7 @@
         <div class="flex items-center justify-between">
             <div>
                 <flux:heading size="xl">{{ $node->name }} — {{ __('Logs') }}</flux:heading>
-                <flux:text>{{ $node->host }} ({{ ucfirst($node->role->value) }})</flux:text>
+                <flux:text>{{ $node->server->host }} ({{ ucfirst($node->role->value) }})</flux:text>
             </div>
             <flux:button href="{{ route('cluster.manage', $node->cluster_id) }}" wire:navigate icon="arrow-left">
                 {{ __('Back to Cluster') }}

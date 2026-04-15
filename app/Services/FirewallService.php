@@ -58,7 +58,7 @@ class FirewallService
             // MySQL protocol port
             $results[] = $this->ssh->exec(
                 $node,
-                "ufw allow from {$peer->host} to any port {$node->mysql_port} proto tcp comment 'MySQL from {$peer->name}'",
+                "ufw allow from {$peer->server->host} to any port {$node->mysql_port} proto tcp comment 'MySQL from {$peer->name}'",
                 'firewall.rule',
                 sudo: true
             );
@@ -66,7 +66,7 @@ class FirewallService
             // MySQL X protocol port
             $results[] = $this->ssh->exec(
                 $node,
-                "ufw allow from {$peer->host} to any port {$node->mysql_x_port} proto tcp comment 'MySQL X from {$peer->name}'",
+                "ufw allow from {$peer->server->host} to any port {$node->mysql_x_port} proto tcp comment 'MySQL X from {$peer->name}'",
                 'firewall.rule',
                 sudo: true
             );
@@ -74,7 +74,7 @@ class FirewallService
             // Group Replication communication port (33061)
             $results[] = $this->ssh->exec(
                 $node,
-                "ufw allow from {$peer->host} to any port 33061 proto tcp comment 'GR comm from {$peer->name}'",
+                "ufw allow from {$peer->server->host} to any port 33061 proto tcp comment 'GR comm from {$peer->name}'",
                 'firewall.rule',
                 sudo: true
             );
@@ -84,7 +84,7 @@ class FirewallService
         foreach ($cluster->accessNodes as $accessNode) {
             $results[] = $this->ssh->exec(
                 $node,
-                "ufw allow from {$accessNode->host} to any port {$node->mysql_port} proto tcp comment 'MySQL from router {$accessNode->name}'",
+                "ufw allow from {$accessNode->server->host} to any port {$node->mysql_port} proto tcp comment 'MySQL from router {$accessNode->name}'",
                 'firewall.rule',
                 sudo: true
             );
@@ -152,14 +152,14 @@ class FirewallService
             // Allow the new node to connect to existing nodes
             $results[] = $this->ssh->exec(
                 $existingNode,
-                "ufw allow from {$newNode->host} to any port {$existingNode->mysql_port} proto tcp comment 'MySQL from {$newNode->name}'",
+                "ufw allow from {$newNode->server->host} to any port {$existingNode->mysql_port} proto tcp comment 'MySQL from {$newNode->name}'",
                 'firewall.rule',
                 sudo: true
             );
 
             $results[] = $this->ssh->exec(
                 $existingNode,
-                "ufw allow from {$newNode->host} to any port 33061 proto tcp comment 'GR comm from {$newNode->name}'",
+                "ufw allow from {$newNode->server->host} to any port 33061 proto tcp comment 'GR comm from {$newNode->name}'",
                 'firewall.rule',
                 sudo: true
             );

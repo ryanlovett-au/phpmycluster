@@ -212,7 +212,7 @@ it('detectHostState detects a fully provisioned host', function () {
         ->andReturn('test-cluster');
 
     $sshService = Mockery::mock(SshService::class);
-    $sshService->shouldReceive('connect')->once()->with($node)->andReturn($ssh);
+    $sshService->shouldReceive('connect')->once()->with($node->getServer())->andReturn($ssh);
 
     $job = new TraitTestJob;
     $method = new ReflectionMethod($job, 'detectHostState');
@@ -254,7 +254,7 @@ it('detectHostState returns defaults for a fresh host', function () {
         ->andReturn('');
 
     $sshService = Mockery::mock(SshService::class);
-    $sshService->shouldReceive('connect')->once()->with($node)->andReturn($ssh);
+    $sshService->shouldReceive('connect')->once()->with($node->getServer())->andReturn($ssh);
 
     $job = new TraitTestJob;
     $method = new ReflectionMethod($job, 'detectHostState');

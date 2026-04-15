@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Jobs\ProvisionClusterJob;
 use App\Models\MysqlCluster;
 use App\Models\MysqlNode;
+use App\Models\Server;
 use App\Services\SshService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -85,21 +86,21 @@ class ClusterSetupWizard extends Component
             $node = $cluster->nodes()->first();
             if ($node) {
                 $this->seedName = $node->name;
-                $this->seedHost = $node->host;
-                $this->seedSshPort = $node->ssh_port;
-                $this->seedSshUser = $node->ssh_user;
+                $this->seedHost = $node->server->host;
+                $this->seedSshPort = $node->server->ssh_port;
+                $this->seedSshUser = $node->server->ssh_user;
                 $this->seedMysqlPort = $node->mysql_port;
                 $this->mysqlRootPassword = $node->mysql_root_password_encrypted ?? '';
 
                 // Test if existing SSH key still works
-                if (empty($node->ssh_private_key_encrypted)) {
+                if (empty($node->server->ssh_private_key_encrypted)) {
                     // Key not stored in the database
                     $this->sshKeyMissing = true;
                     $this->sshKeyMode = 'generate';
                 } else {
                     $sshService = app(SshService::class);
                     try {
-                        $result = $sshService->testConnection($node);
+                        $result = $sshService->testConnection($node->server);
                         if ($result['success']) {
                             // Key works — skip straight to provision
                             $this->sshKeyMode = 'existing';
@@ -247,26 +248,24 @@ class ClusterSetupWizard extends Component
                 $this->mysqlRootPassword = $node->mysql_root_password_encrypted ?? '';
             }
 
-            $updateData = [
+            // Update server SSH details
+            $serverData = [
                 'host' => $this->seedHost,
                 'ssh_port' => $this->seedSshPort,
                 'ssh_user' => $this->seedSshUser,
-                'role' => 'pending',
-                'status' => 'unknown',
             ];
-
-            // Only overwrite SSH key if a new one was actually provided
             if (! empty($privateKey)) {
-                $updateData['ssh_private_key_encrypted'] = $privateKey;
-                $updateData['ssh_public_key'] = $publicKey;
+                $serverData['ssh_private_key_encrypted'] = $privateKey;
+                $serverData['ssh_public_key'] = $publicKey;
             }
+            $node->server->update($serverData);
 
-            // Only overwrite root password if a new one was entered
+            // Update node
+            $nodeData = ['role' => 'pending', 'status' => 'unknown'];
             if (! empty($this->mysqlRootPassword)) {
-                $updateData['mysql_root_password_encrypted'] = $this->mysqlRootPassword;
+                $nodeData['mysql_root_password_encrypted'] = $this->mysqlRootPassword;
             }
-
-            $node->update($updateData);
+            $node->update($nodeData);
         } else {
             // New cluster: create records
             $cluster = MysqlCluster::create([
@@ -278,18 +277,23 @@ class ClusterSetupWizard extends Component
             ]);
             $this->clusterId = $cluster->id;
 
-            $node = MysqlNode::create([
-                'cluster_id' => $cluster->id,
-                'name' => $this->seedName ?: "node-1-{$this->seedHost}",
+            $server = Server::create([
+                'name' => $this->seedName ?: "server-{$this->seedHost}",
                 'host' => $this->seedHost,
                 'ssh_port' => $this->seedSshPort,
                 'ssh_user' => $this->seedSshUser,
                 'ssh_private_key_encrypted' => $privateKey,
                 'ssh_public_key' => $publicKey,
+            ]);
+
+            $node = MysqlNode::create([
+                'server_id' => $server->id,
+                'cluster_id' => $cluster->id,
+                'name' => $this->seedName ?: "node-1-{$this->seedHost}",
                 'mysql_port' => $this->seedMysqlPort,
                 'mysql_root_password_encrypted' => $this->mysqlRootPassword,
                 'role' => 'pending',
-                'server_id' => 1,
+                'mysql_server_id' => 1,
             ]);
         }
 

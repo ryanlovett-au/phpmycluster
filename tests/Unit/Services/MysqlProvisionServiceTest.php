@@ -2,6 +2,7 @@
 
 use App\Models\MysqlCluster;
 use App\Models\MysqlNode;
+use App\Models\Server;
 use App\Services\MysqlProvisionService;
 use App\Services\SshService;
 use Illuminate\Support\Facades\Http;
@@ -495,14 +496,15 @@ it('installMysqlRouter marks not installed when version check fails', function (
     expect($node->mysql_router_installed)->toBeFalse();
 });
 
-it('writeMysqlConfig generates correct config with server_id', function () {
+it('writeMysqlConfig generates correct config with mysql_server_id', function () {
     $cluster = MysqlCluster::factory()->online()->create();
+    $server = Server::factory()->create(['host' => '10.0.0.1']);
     $node = MysqlNode::factory()->primary()->create([
+        'server_id' => $server->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.1',
         'mysql_port' => 3306,
         'mysql_x_port' => 33060,
-        'server_id' => 42,
+        'mysql_server_id' => 42,
     ]);
 
     $uploadedContent = null;
@@ -535,11 +537,11 @@ it('writeMysqlConfig generates correct config with server_id', function () {
         ->and($uploadedContent)->toContain('group_replication.so');
 });
 
-it('writeMysqlConfig uses node id when server_id is null', function () {
+it('writeMysqlConfig uses node id when mysql_server_id is null', function () {
     $cluster = MysqlCluster::factory()->online()->create();
     $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
-        'server_id' => null,
+        'mysql_server_id' => null,
     ]);
 
     $uploadedContent = null;
@@ -571,7 +573,7 @@ it('writeMysqlConfig updates node on success', function () {
     $node = MysqlNode::factory()->create([
         'cluster_id' => $cluster->id,
         'mysql_configured' => false,
-        'server_id' => 99,
+        'mysql_server_id' => 99,
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
@@ -588,7 +590,7 @@ it('writeMysqlConfig updates node on success', function () {
 
     $node->refresh();
     expect($node->mysql_configured)->toBeTrue()
-        ->and($node->server_id)->toBe(99);
+        ->and($node->mysql_server_id)->toBe(99);
 });
 
 it('writeMysqlConfig does not update node on failure', function () {
@@ -624,7 +626,7 @@ it('writeMysqlConfig uses fallback conf dir when detection returns empty', funct
     $cluster = MysqlCluster::factory()->online()->create();
     $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
-        'server_id' => 1,
+        'mysql_server_id' => 1,
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
@@ -697,9 +699,10 @@ it('restartMysql returns failure when systemctl fails', function () {
 it('bootstrapRouter runs bootstrap and starts service on success', function () {
     $cluster = MysqlCluster::factory()->online()->create();
     $accessNode = MysqlNode::factory()->access()->create(['cluster_id' => $cluster->id]);
+    $primaryServer = Server::factory()->create(['host' => '10.0.0.1']);
     $primaryNode = MysqlNode::factory()->primary()->create([
+        'server_id' => $primaryServer->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.1',
         'mysql_port' => 3306,
     ]);
 
@@ -724,9 +727,10 @@ it('bootstrapRouter runs bootstrap and starts service on success', function () {
 it('bootstrapRouter does not start service on failure', function () {
     $cluster = MysqlCluster::factory()->online()->create();
     $accessNode = MysqlNode::factory()->access()->create(['cluster_id' => $cluster->id]);
+    $primaryServer = Server::factory()->create(['host' => '10.0.0.1']);
     $primaryNode = MysqlNode::factory()->primary()->create([
+        'server_id' => $primaryServer->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.1',
         'mysql_port' => 3306,
     ]);
 
@@ -752,9 +756,10 @@ it('bootstrapRouter does not start service on failure', function () {
 it('bootstrapRouter passes correct bootstrap command with primary host', function () {
     $cluster = MysqlCluster::factory()->online()->create();
     $accessNode = MysqlNode::factory()->access()->create(['cluster_id' => $cluster->id]);
+    $primaryServer = Server::factory()->create(['host' => '10.0.0.1']);
     $primaryNode = MysqlNode::factory()->primary()->create([
+        'server_id' => $primaryServer->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.1',
         'mysql_port' => 3306,
     ]);
 
@@ -822,9 +827,9 @@ it('detectSystemInfo detects RAM CPU and OS', function () {
         ->and($result['os_name'])->toBe('Ubuntu 22.04.3 LTS');
 
     $node->refresh();
-    expect($node->ram_mb)->toBe(8192)
-        ->and($node->cpu_cores)->toBe(4)
-        ->and($node->os_name)->toBe('Ubuntu 22.04.3 LTS');
+    expect($node->server->ram_mb)->toBe(8192)
+        ->and($node->server->cpu_cores)->toBe(4)
+        ->and($node->server->os_name)->toBe('Ubuntu 22.04.3 LTS');
 });
 
 it('detectSystemInfo handles empty output gracefully', function () {
@@ -883,10 +888,13 @@ it('calculateTuning handles minimum values for 512MB server', function () {
 
 it('writeMysqlConfig includes tuning section when RAM is known', function () {
     $cluster = MysqlCluster::factory()->online()->create();
-    $node = MysqlNode::factory()->primary()->create([
-        'cluster_id' => $cluster->id,
+    $server = Server::factory()->create([
         'ram_mb' => 8192,
         'cpu_cores' => 4,
+    ]);
+    $node = MysqlNode::factory()->primary()->create([
+        'server_id' => $server->id,
+        'cluster_id' => $cluster->id,
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
@@ -920,10 +928,13 @@ it('writeMysqlConfig includes tuning section when RAM is known', function () {
 
 it('writeMysqlConfig omits tuning section when RAM is unknown', function () {
     $cluster = MysqlCluster::factory()->online()->create();
-    $node = MysqlNode::factory()->primary()->create([
-        'cluster_id' => $cluster->id,
+    $server = Server::factory()->create([
         'ram_mb' => null,
         'cpu_cores' => null,
+    ]);
+    $node = MysqlNode::factory()->primary()->create([
+        'server_id' => $server->id,
+        'cluster_id' => $cluster->id,
     ]);
 
     $sshMock = Mockery::mock(SshService::class);

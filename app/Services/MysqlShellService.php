@@ -162,7 +162,7 @@ try {
 try {
     shell.connect('clusteradmin@localhost:{$primaryNode->mysql_port}', '{$password}');
     var c = dba.getCluster();
-    c.addInstance('clusteradmin@{$newNode->host}:{$newNode->mysql_port}', {{$options}});
+    c.addInstance('clusteradmin@{$newNode->server->host}:{$newNode->mysql_port}', {{$options}});
     print(JSON.stringify(c.status()));
 } catch(e) {
     print(JSON.stringify({error: e.message}));
@@ -181,7 +181,7 @@ try {
 try {
     shell.connect('clusteradmin@localhost:{$primaryNode->mysql_port}', '{$password}');
     var c = dba.getCluster();
-    c.removeInstance('clusteradmin@{$targetNode->host}:{$targetNode->mysql_port}'{$forceOption});
+    c.removeInstance('clusteradmin@{$targetNode->server->host}:{$targetNode->mysql_port}'{$forceOption});
     print(JSON.stringify({status: 'removed'}));
 } catch(e) {
     print(JSON.stringify({error: e.message}));
@@ -198,7 +198,7 @@ try {
 try {
     shell.connect('clusteradmin@localhost:{$primaryNode->mysql_port}', '{$password}');
     var c = dba.getCluster();
-    c.rejoinInstance('clusteradmin@{$targetNode->host}:{$targetNode->mysql_port}');
+    c.rejoinInstance('clusteradmin@{$targetNode->server->host}:{$targetNode->mysql_port}');
     print(JSON.stringify(c.status()));
 } catch(e) {
     print(JSON.stringify({error: e.message}));

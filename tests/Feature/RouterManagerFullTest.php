@@ -4,6 +4,7 @@ use App\Jobs\SetupRouterJob;
 use App\Livewire\RouterManager;
 use App\Models\MysqlCluster;
 use App\Models\MysqlNode;
+use App\Models\Server;
 use App\Services\MysqlProvisionService;
 use App\Services\SshService;
 use Illuminate\Support\Facades\Cache;
@@ -26,10 +27,11 @@ it('renders with cluster data', function () {
 it('shows router nodes', function () {
     $user = createAdmin();
     $cluster = MysqlCluster::factory()->online()->create();
+    $server = Server::factory()->create(['host' => '10.0.0.50']);
     $router = MysqlNode::factory()->access()->create([
+        'server_id' => $server->id,
         'cluster_id' => $cluster->id,
         'name' => 'router-node-1',
-        'host' => '10.0.0.50',
     ]);
 
     Livewire::actingAs($user)
@@ -119,7 +121,7 @@ it('creates a router node and dispatches the setup job', function () {
 
     Queue::assertPushed(SetupRouterJob::class);
 
-    $routerNode = MysqlNode::where('host', '10.0.0.20')->first();
+    $routerNode = MysqlNode::whereHas('server', fn ($q) => $q->where('host', '10.0.0.20'))->first();
     expect($routerNode)->not->toBeNull();
     expect($routerNode->role->value)->toBe('access');
     expect($routerNode->name)->toBe('router-10.0.0.20');
@@ -139,7 +141,7 @@ it('uses custom router name when provided', function () {
         ->call('setupRouter')
         ->assertSet('settingUpRouter', true);
 
-    $routerNode = MysqlNode::where('host', '10.0.0.20')->first();
+    $routerNode = MysqlNode::whereHas('server', fn ($q) => $q->where('host', '10.0.0.20'))->first();
     expect($routerNode->name)->toBe('my-custom-router');
 });
 
@@ -426,9 +428,9 @@ it('sets up a router with generated key pair', function () {
 
     Queue::assertPushed(SetupRouterJob::class);
 
-    $routerNode = MysqlNode::where('host', '10.0.0.30')->first();
+    $routerNode = MysqlNode::whereHas('server', fn ($q) => $q->where('host', '10.0.0.30'))->first();
     expect($routerNode)->not->toBeNull();
-    expect($routerNode->ssh_public_key)->toBe('gen-router-pub');
+    expect($routerNode->server->ssh_public_key)->toBe('gen-router-pub');
 });
 
 // Note: The catch block in setupRouter() (line 109-110) is defensive error handling

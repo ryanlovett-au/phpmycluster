@@ -3,6 +3,7 @@
 use App\Jobs\RefreshDbStatusJob;
 use App\Models\MysqlCluster;
 use App\Models\MysqlNode;
+use App\Models\Server;
 use App\Services\MysqlShellService;
 use Illuminate\Bus\Batch;
 use Illuminate\Support\Facades\Cache;
@@ -13,15 +14,17 @@ it('updates cluster and node statuses from cluster status response', function ()
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
+    $primaryServer = Server::factory()->create(['host' => '10.0.0.1']);
     $primaryNode = MysqlNode::factory()->primary()->create([
+        'server_id' => $primaryServer->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.1',
         'mysql_port' => 3306,
     ]);
 
+    $secondaryServer = Server::factory()->create(['host' => '10.0.0.2']);
     $secondaryNode = MysqlNode::factory()->secondary()->create([
+        'server_id' => $secondaryServer->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.2',
         'mysql_port' => 3306,
     ]);
 
@@ -85,15 +88,17 @@ it('marks nodes as error when member status is not ONLINE', function () {
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
+    $primaryServer = Server::factory()->create(['host' => '10.0.0.1']);
     $primaryNode = MysqlNode::factory()->primary()->create([
+        'server_id' => $primaryServer->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.1',
         'mysql_port' => 3306,
     ]);
 
+    $secondaryServer = Server::factory()->create(['host' => '10.0.0.2']);
     $secondaryNode = MysqlNode::factory()->secondary()->create([
+        'server_id' => $secondaryServer->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.2',
         'mysql_port' => 3306,
     ]);
 
@@ -139,9 +144,10 @@ it('marks recovering nodes correctly', function () {
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
+    $primaryServer = Server::factory()->create(['host' => '10.0.0.1']);
     $primaryNode = MysqlNode::factory()->primary()->create([
+        'server_id' => $primaryServer->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.1',
         'mysql_port' => 3306,
     ]);
 
@@ -180,15 +186,17 @@ it('tries secondary nodes when primary fails', function () {
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
+    $primaryServer = Server::factory()->create(['host' => '10.0.0.1']);
     $primaryNode = MysqlNode::factory()->primary()->create([
+        'server_id' => $primaryServer->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.1',
         'mysql_port' => 3306,
     ]);
 
+    $secondaryServer = Server::factory()->create(['host' => '10.0.0.2']);
     $secondaryNode = MysqlNode::factory()->secondary()->create([
+        'server_id' => $secondaryServer->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.2',
         'mysql_port' => 3306,
     ]);
 
@@ -249,9 +257,10 @@ it('returns early when batch is cancelled', function () {
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
+    $primaryServer = Server::factory()->create(['host' => '10.0.0.1']);
     MysqlNode::factory()->primary()->create([
+        'server_id' => $primaryServer->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.1',
     ]);
 
     $mysqlShellMock = Mockery::mock(MysqlShellService::class);
@@ -273,9 +282,10 @@ it('sets cluster status to degraded for NO_QUORUM', function () {
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
+    $primaryServer = Server::factory()->create(['host' => '10.0.0.1']);
     $primaryNode = MysqlNode::factory()->primary()->create([
+        'server_id' => $primaryServer->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.1',
         'mysql_port' => 3306,
     ]);
 
@@ -314,9 +324,10 @@ it('sets cluster status to offline for OFFLINE replica set status', function () 
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
+    $primaryServer = Server::factory()->create(['host' => '10.0.0.1']);
     $primaryNode = MysqlNode::factory()->primary()->create([
+        'server_id' => $primaryServer->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.1',
         'mysql_port' => 3306,
     ]);
 
@@ -355,9 +366,10 @@ it('logs warning when all nodes fail and captures last error from exception', fu
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
+    $primaryServer = Server::factory()->create(['host' => '10.0.0.1']);
     $primaryNode = MysqlNode::factory()->primary()->create([
+        'server_id' => $primaryServer->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.1',
         'mysql_port' => 3306,
     ]);
 
@@ -383,9 +395,10 @@ it('captures last error from failed result data', function () {
         'cluster_admin_password_encrypted' => 'testpassword',
     ]);
 
+    $primaryServer = Server::factory()->create(['host' => '10.0.0.1']);
     $primaryNode = MysqlNode::factory()->primary()->create([
+        'server_id' => $primaryServer->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.1',
         'mysql_port' => 3306,
     ]);
 

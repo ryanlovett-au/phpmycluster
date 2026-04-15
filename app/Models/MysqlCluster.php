@@ -94,7 +94,9 @@ class MysqlCluster extends Model
     public function buildIpAllowlist(): string
     {
         return $this->dbNodes()
-            ->pluck('host')
+            ->with('server')
+            ->get()
+            ->pluck('server.host')
             ->unique()
             ->implode(',');
     }

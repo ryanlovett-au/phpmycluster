@@ -9,6 +9,7 @@ use App\Jobs\RefreshUserListJob;
 use App\Jobs\SetupRouterJob;
 use App\Models\MysqlCluster;
 use App\Models\MysqlNode;
+use App\Models\Server;
 use App\Services\MysqlProvisionService;
 use App\Services\MysqlShellService;
 use App\Services\SshService;
@@ -250,20 +251,25 @@ class ClusterManager extends Component
             : '';
 
         try {
-            // Determine server_id
-            $maxServerId = $this->cluster->nodes()->max('server_id') ?? 0;
+            // Determine mysql_server_id
+            $maxServerId = $this->cluster->nodes()->max('mysql_server_id') ?? 0;
 
-            $node = MysqlNode::create([
-                'cluster_id' => $this->cluster->id,
-                'name' => $this->newNodeName ?: 'node-'.($maxServerId + 1)."-{$this->newNodeHost}",
+            $server = Server::create([
+                'name' => $this->newNodeName ?: "server-{$this->newNodeHost}",
                 'host' => $this->newNodeHost,
                 'ssh_port' => $this->newNodeSshPort,
                 'ssh_user' => $this->newNodeSshUser,
                 'ssh_private_key_encrypted' => $privateKey,
                 'ssh_public_key' => $publicKey,
+            ]);
+
+            $node = MysqlNode::create([
+                'server_id' => $server->id,
+                'cluster_id' => $this->cluster->id,
+                'name' => $this->newNodeName ?: 'node-'.($maxServerId + 1)."-{$this->newNodeHost}",
                 'role' => 'pending',
                 'status' => 'unknown',
-                'server_id' => $maxServerId + 1,
+                'mysql_server_id' => $maxServerId + 1,
             ]);
 
             // Clear any previous progress for this node
@@ -397,14 +403,19 @@ class ClusterManager extends Component
             : '';
 
         try {
-            $node = MysqlNode::create([
-                'cluster_id' => $this->cluster->id,
-                'name' => $this->routerName ?: "router-{$this->routerHost}",
+            $server = Server::create([
+                'name' => $this->routerName ?: "server-{$this->routerHost}",
                 'host' => $this->routerHost,
                 'ssh_port' => $this->routerSshPort,
                 'ssh_user' => $this->routerSshUser,
                 'ssh_private_key_encrypted' => $privateKey,
                 'ssh_public_key' => $publicKey,
+            ]);
+
+            $node = MysqlNode::create([
+                'server_id' => $server->id,
+                'cluster_id' => $this->cluster->id,
+                'name' => $this->routerName ?: "router-{$this->routerHost}",
                 'role' => 'access',
                 'status' => 'unknown',
             ]);
