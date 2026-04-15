@@ -7,7 +7,7 @@ it('allows an approved user to view the setup wizard', function () {
     $user = createApprovedUser();
 
     $this->actingAs($user)
-        ->get(route('cluster.create'))
+        ->get(route('mysql.create'))
         ->assertOk();
 });
 

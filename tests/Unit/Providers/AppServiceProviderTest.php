@@ -3,8 +3,8 @@
 use App\Providers\AppServiceProvider;
 use App\Services\FirewallService;
 use App\Services\LogStreamService;
+use App\Services\MysqlProvisionService;
 use App\Services\MysqlShellService;
-use App\Services\NodeProvisionService;
 use App\Services\SshService;
 use Carbon\CarbonImmutable;
 use Illuminate\Validation\Rules\Password;
@@ -19,9 +19,9 @@ it('registers MysqlShellService as singleton', function () {
         ->toBe(app(MysqlShellService::class));
 });
 
-it('registers NodeProvisionService as singleton', function () {
-    expect(app(NodeProvisionService::class))
-        ->toBe(app(NodeProvisionService::class));
+it('registers MysqlProvisionService as singleton', function () {
+    expect(app(MysqlProvisionService::class))
+        ->toBe(app(MysqlProvisionService::class));
 });
 
 it('registers FirewallService as singleton', function () {

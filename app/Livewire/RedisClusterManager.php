@@ -1,0 +1,796 @@
+<?php
+
+namespace App\Livewire;
+
+use App\Jobs\AddRedisNodeJob;
+use App\Jobs\RefreshRedisStatusJob;
+use App\Models\RedisCluster;
+use App\Models\RedisNode;
+use App\Models\Server;
+use App\Services\FirewallService;
+use App\Services\RedisCliService;
+use App\Services\SshService;
+use Illuminate\Support\Facades\Cache;
+use Livewire\Component;
+
+class RedisClusterManager extends Component
+{
+    public RedisCluster $cluster;
+
+    // Add node form
+    public bool $showAddNodeModal = false;
+
+    public string $addNodeServerMode = 'new'; // new or existing
+
+    public ?int $addNodeSelectedServerId = null;
+
+    public string $addNodeHost = '';
+
+    public string $addNodeName = '';
+
+    public int $addNodeSshPort = 22;
+
+    public string $addNodeSshUser = 'root';
+
+    public int $addNodeRedisPort = 6379;
+
+    public int $addNodeSentinelPort = 26379;
+
+    public string $addNodeSshKeyMode = 'generate';
+
+    public string $addNodePrivateKey = '';
+
+    public ?array $addNodeKeyPair = null;
+
+    // Add node provisioning progress
+    public bool $addingNode = false;
+
+    public bool $addNodeComplete = false;
+
+    public ?int $addingNodeId = null;
+
+    public array $addNodeSteps = [];
+
+    // Firewall
+    public bool $showFirewallModal = false;
+
+    public ?int $firewallNodeId = null;
+
+    public string $firewallOutput = '';
+
+    public string $firewallNewIp = '';
+
+    public array $firewallRules = [];
+
+    // Rename node
+    public ?int $renamingNodeId = null;
+
+    public string $renameValue = '';
+
+    // Status
+    public bool $refreshing = false;
+
+    public ?string $refreshBatchId = null;
+
+    // SSH test result
+    public string $sshTestResult = '';
+
+    // Action feedback
+    public string $actionMessage = '';
+
+    public string $actionStatus = ''; // success, error, info
+
+    public function mount(RedisCluster $cluster)
+    {
+        $this->cluster = $cluster->load('nodes');
+    }
+
+    // ─── Cluster Status ─────────────────────────────────────────────────
+
+    /**
+     * Refresh cluster status by dispatching a background job.
+     */
+    public function refreshStatus()
+    {
+        $this->refreshing = true;
+
+        try {
+            RefreshRedisStatusJob::dispatch($this->cluster);
+
+            // Poll will check for completion
+            Cache::put("redis_cluster_refreshing_{$this->cluster->id}", true, now()->addMinutes(5));
+        } catch (\Throwable $e) {
+            $this->setMessage("Failed to dispatch refresh: {$e->getMessage()}", 'error');
+            $this->refreshing = false;
+        }
+    }
+
+    /**
+     * Poll the refresh status for completion.
+     */
+    public function pollRefresh(): void
+    {
+        $stillRefreshing = Cache::get("redis_cluster_refreshing_{$this->cluster->id}");
+
+        if (! $stillRefreshing) {
+            $this->cluster->refresh();
+            $this->refreshing = false;
+            $this->setMessage('Cluster status refreshed.', 'success');
+        }
+    }
+
+    // ─── Add Node ───────────────────────────────────────────────────────
+
+    /**
+     * Generate SSH key for new node.
+     */
+    public function generateAddNodeKey()
+    {
+        $this->addNodeKeyPair = app(SshService::class)->generateKeyPair();
+    }
+
+    /**
+     * Add a new replica node to the cluster — dispatches a background job.
+     */
+    public function addNode()
+    {
+        if ($this->addNodeServerMode === 'existing') {
+            $this->validate([
+                'addNodeSelectedServerId' => 'required|exists:servers,id',
+            ], [
+                'addNodeSelectedServerId.required' => 'Please select a server.',
+            ]);
+        } else {
+            $this->validate([
+                'addNodeHost' => 'required|string',
+            ]);
+        }
+
+        try {
+            if ($this->addNodeServerMode === 'existing' && $this->addNodeSelectedServerId) {
+                $server = Server::findOrFail($this->addNodeSelectedServerId);
+            } else {
+                $privateKey = $this->addNodeSshKeyMode === 'generate'
+                    ? $this->addNodeKeyPair['private']
+                    : $this->addNodePrivateKey;
+
+                $publicKey = $this->addNodeSshKeyMode === 'generate'
+                    ? $this->addNodeKeyPair['public']
+                    : '';
+
+                $server = Server::create([
+                    'name' => $this->addNodeName ?: "server-{$this->addNodeHost}",
+                    'host' => $this->addNodeHost,
+                    'ssh_port' => $this->addNodeSshPort,
+                    'ssh_user' => $this->addNodeSshUser,
+                    'ssh_private_key_encrypted' => $privateKey,
+                    'ssh_public_key' => $publicKey,
+                ]);
+            }
+
+            $nodeCount = $this->cluster->nodes()->count();
+
+            $node = RedisNode::create([
+                'server_id' => $server->id,
+                'redis_cluster_id' => $this->cluster->id,
+                'name' => $this->addNodeName ?: 'node-'.($nodeCount + 1)."-{$server->host}",
+                'redis_port' => $this->addNodeRedisPort,
+                'sentinel_port' => $this->addNodeSentinelPort,
+                'role' => 'pending',
+                'status' => 'unknown',
+            ]);
+
+            // Clear any previous progress for this node
+            Cache::forget(AddRedisNodeJob::progressKey($node->id));
+
+            // Dispatch the job
+            AddRedisNodeJob::dispatch($this->cluster, $node);
+
+            $this->addingNode = true;
+            $this->addNodeComplete = false;
+            $this->addingNodeId = $node->id;
+            $this->addNodeSteps = [
+                ['message' => "Starting provisioning for {$node->name}...", 'status' => 'running', 'time' => now()->format('H:i:s')],
+            ];
+            $this->showAddNodeModal = false;
+
+        } catch (\Throwable $e) { // @codeCoverageIgnore
+            $this->setMessage("Error creating node: {$e->getMessage()}", 'error'); // @codeCoverageIgnore
+        }
+    }
+
+    /**
+     * Poll the add-node job progress from the cache.
+     */
+    public function pollAddNode(): void
+    {
+        if (! $this->addingNodeId) {
+            return;
+        }
+
+        $progress = Cache::get(AddRedisNodeJob::progressKey($this->addingNodeId));
+
+        if (! $progress) {
+            return;
+        }
+
+        $this->addNodeSteps = $progress['steps'];
+
+        if ($progress['status'] === 'complete') {
+            $this->addNodeComplete = true;
+            $this->addingNode = false;
+            $this->cluster->refresh();
+            $this->resetAddNodeForm();
+        } elseif ($progress['status'] === 'failed') {
+            $this->addingNode = false;
+        }
+    }
+
+    /**
+     * Dismiss the add-node progress panel.
+     */
+    public function dismissAddNodeProgress(): void
+    {
+        $this->addNodeSteps = [];
+        $this->addNodeComplete = false;
+        $this->addingNodeId = null;
+        $this->cluster->refresh();
+        $this->refreshStatus();
+    }
+
+    /**
+     * Remove a node from the cluster.
+     */
+    public function removeNode(int $nodeId): void
+    {
+        $node = RedisNode::findOrFail($nodeId);
+        $name = $node->name;
+
+        if ($node->isMaster()) {
+            $this->setMessage('Cannot remove the master node. Trigger a failover first.', 'error');
+
+            return;
+        }
+
+        $node->delete();
+
+        $this->setMessage("Node {$name} removed.", 'success');
+        $this->cluster->refresh();
+    }
+
+    // ─── Recovery & Maintenance Actions ────────────────────────────────
+
+    /**
+     * Trigger a Sentinel failover to promote a replica to master.
+     */
+    public function failover()
+    {
+        $master = $this->cluster->masterNode();
+
+        if (! $master) {
+            $this->setMessage('No master node available.', 'error');
+
+            return;
+        }
+
+        try {
+            $redisCliService = app(RedisCliService::class);
+            $sentinelPassword = $this->cluster->sentinel_password_encrypted;
+            $result = $redisCliService->sentinelFailover($master, $this->cluster->name, $sentinelPassword);
+
+            if ($result['success']) {
+                $this->setMessage('Sentinel failover initiated. Refresh status in a few seconds to see the new topology.', 'success');
+                $this->refreshStatus();
+            } else {
+                $this->setMessage('Failover failed: '.($result['output'] ?? 'Unknown error'), 'error');
+            }
+        } catch (\Throwable $e) {
+            $this->setMessage("Failover error: {$e->getMessage()}", 'error');
+        }
+    }
+
+    /**
+     * Restart the Redis server service on a node.
+     */
+    public function restartRedis(int $nodeId): void
+    {
+        $node = RedisNode::findOrFail($nodeId);
+
+        try {
+            $ssh = app(SshService::class);
+            $result = $ssh->exec($node, 'systemctl restart redis-server 2>&1', 'redis.restart', sudo: true);
+
+            if ($result['success']) {
+                $this->setMessage("Redis service restarted on {$node->name}.", 'success');
+            } else {
+                $this->setMessage("Failed to restart Redis on {$node->name}: ".($result['output'] ?? 'Unknown error'), 'error');
+            }
+        } catch (\Throwable $e) {
+            $this->setMessage("Error restarting Redis: {$e->getMessage()}", 'error');
+        }
+    }
+
+    /**
+     * Restart the Sentinel service on a node.
+     */
+    public function restartSentinel(int $nodeId): void
+    {
+        $node = RedisNode::findOrFail($nodeId);
+
+        try {
+            $ssh = app(SshService::class);
+            $result = $ssh->exec($node, 'systemctl restart redis-sentinel 2>&1', 'sentinel.restart', sudo: true);
+
+            if ($result['success']) {
+                $this->setMessage("Sentinel service restarted on {$node->name}.", 'success');
+            } else {
+                $this->setMessage("Failed to restart Sentinel on {$node->name}: ".($result['output'] ?? 'Unknown error'), 'error');
+            }
+        } catch (\Throwable $e) {
+            $this->setMessage("Error restarting Sentinel: {$e->getMessage()}", 'error');
+        }
+    }
+
+    /**
+     * Force a replica to re-sync with the master by issuing REPLICAOF.
+     */
+    public function forceResync(int $nodeId): void
+    {
+        $node = RedisNode::findOrFail($nodeId);
+
+        if ($node->isMaster()) {
+            $this->setMessage('Cannot force resync on the master node.', 'error');
+
+            return;
+        }
+
+        $master = $this->cluster->masterNode();
+
+        if (! $master) {
+            $this->setMessage('No master node found. Cannot resync.', 'error');
+
+            return;
+        }
+
+        try {
+            $redis = app(RedisCliService::class);
+            $password = $this->cluster->auth_password_encrypted;
+
+            // Issue REPLICAOF to re-establish replication
+            $result = $redis->replicaOf($node, $master->server->host, $master->redis_port, $password);
+
+            if ($result['success']) {
+                $this->setMessage("Resync initiated on {$node->name}. A full sync will occur.", 'success');
+            } else {
+                $this->setMessage("Failed to resync {$node->name}: ".($result['output'] ?? 'Unknown error'), 'error');
+            }
+        } catch (\Throwable $e) {
+            $this->setMessage("Error forcing resync: {$e->getMessage()}", 'error');
+        }
+    }
+
+    /**
+     * Reset Sentinel state to clear stale entries.
+     */
+    public function resetSentinel(): void
+    {
+        $anyNode = $this->cluster->nodes->first();
+
+        if (! $anyNode) {
+            $this->setMessage('No nodes available.', 'error');
+
+            return;
+        }
+
+        try {
+            $redis = app(RedisCliService::class);
+            $sentinelPassword = $this->cluster->sentinel_password_encrypted;
+            $result = $redis->sentinelReset($anyNode, $this->cluster->name, $sentinelPassword);
+
+            if ($result['success']) {
+                $this->setMessage('Sentinel state reset. Stale entries have been cleared.', 'success');
+            } else {
+                $this->setMessage('Failed to reset Sentinel: '.($result['output'] ?? 'Unknown error'), 'error');
+            }
+        } catch (\Throwable $e) {
+            $this->setMessage("Error resetting Sentinel: {$e->getMessage()}", 'error');
+        }
+    }
+
+    /**
+     * Trigger BGSAVE on a node to create an RDB snapshot.
+     */
+    public function triggerBgsave(int $nodeId): void
+    {
+        $node = RedisNode::findOrFail($nodeId);
+
+        try {
+            $redis = app(RedisCliService::class);
+            $password = $this->cluster->auth_password_encrypted;
+            $result = $redis->bgsave($node, $password);
+
+            if ($result['success']) {
+                $this->setMessage("BGSAVE initiated on {$node->name}.", 'success');
+            } else {
+                $this->setMessage("BGSAVE failed on {$node->name}: ".($result['output'] ?? 'Unknown error'), 'error');
+            }
+        } catch (\Throwable $e) {
+            $this->setMessage("Error: {$e->getMessage()}", 'error');
+        }
+    }
+
+    /**
+     * Trigger AOF rewrite on a node.
+     */
+    public function triggerAofRewrite(int $nodeId): void
+    {
+        $node = RedisNode::findOrFail($nodeId);
+
+        try {
+            $redis = app(RedisCliService::class);
+            $password = $this->cluster->auth_password_encrypted;
+            $result = $redis->bgrewriteaof($node, $password);
+
+            if ($result['success']) {
+                $this->setMessage("AOF rewrite initiated on {$node->name}.", 'success');
+            } else {
+                $this->setMessage("AOF rewrite failed on {$node->name}: ".($result['output'] ?? 'Unknown error'), 'error');
+            }
+        } catch (\Throwable $e) {
+            $this->setMessage("Error: {$e->getMessage()}", 'error');
+        }
+    }
+
+    /**
+     * Purge unused memory on a node.
+     */
+    public function memoryPurge(int $nodeId): void
+    {
+        $node = RedisNode::findOrFail($nodeId);
+
+        try {
+            $redis = app(RedisCliService::class);
+            $password = $this->cluster->auth_password_encrypted;
+            $result = $redis->memoryPurge($node, $password);
+
+            if ($result['success']) {
+                $this->setMessage("Memory purged on {$node->name}.", 'success');
+            } else {
+                $this->setMessage("Memory purge failed on {$node->name}: ".($result['output'] ?? 'Unknown error'), 'error');
+            }
+        } catch (\Throwable $e) {
+            $this->setMessage("Error: {$e->getMessage()}", 'error');
+        }
+    }
+
+    /**
+     * Flush Sentinel config to disk on all nodes.
+     */
+    public function flushSentinelConfig(): void
+    {
+        $redis = app(RedisCliService::class);
+        $sentinelPassword = $this->cluster->sentinel_password_encrypted;
+        $errors = [];
+
+        foreach ($this->cluster->nodes as $node) {
+            try {
+                $result = $redis->sentinelFlushConfig($node, $sentinelPassword);
+                if (! $result['success']) {
+                    $errors[] = "{$node->name}: ".($result['output'] ?? 'Unknown error');
+                }
+            } catch (\Throwable $e) {
+                $errors[] = "{$node->name}: {$e->getMessage()}";
+            }
+        }
+
+        if (empty($errors)) {
+            $this->setMessage('Sentinel config flushed to disk on all nodes.', 'success');
+        } else {
+            $this->setMessage('Some nodes failed: '.implode('; ', $errors), 'error');
+        }
+    }
+
+    // ─── Firewall ───────────────────────────────────────────────────────
+
+    /**
+     * Toggle the firewall management panel for a node.
+     */
+    public function toggleFirewall(int $nodeId): void
+    {
+        if ($this->firewallNodeId === $nodeId) {
+            $this->firewallNodeId = null;
+            $this->showFirewallModal = false;
+            $this->firewallRules = [];
+            $this->firewallOutput = '';
+
+            return;
+        }
+
+        $this->firewallNodeId = $nodeId;
+        $this->showFirewallModal = true;
+        $this->firewallNewIp = '';
+        $this->firewallOutput = '';
+        $this->loadFirewallRules($nodeId);
+    }
+
+    /**
+     * Load current UFW rules for Redis/Sentinel ports.
+     */
+    protected function loadFirewallRules(int $nodeId): void
+    {
+        $node = RedisNode::findOrFail($nodeId);
+        $sshService = app(SshService::class);
+
+        try {
+            $result = $sshService->exec(
+                $node,
+                'ufw status numbered 2>&1',
+                'firewall.status',
+                sudo: true
+            );
+
+            $rules = [];
+            if ($result['success']) {
+                foreach (explode("\n", $result['output']) as $line) {
+                    if (preg_match('/(?:6379|26379)/', $line) && preg_match('/ALLOW/', $line)) {
+                        if (preg_match('/\[\s*(\d+)\]\s+(.+)/', $line, $m)) {
+                            $rules[] = [
+                                'number' => (int) $m[1],
+                                'rule' => trim($m[2]),
+                            ];
+                        }
+                    }
+                }
+                $this->firewallOutput = $result['output'];
+            }
+
+            $this->firewallRules = $rules;
+        } catch (\Throwable $e) {
+            $this->firewallRules = [];
+            $this->firewallOutput = '';
+            $this->setMessage("Could not load firewall rules: {$e->getMessage()}", 'error');
+        }
+    }
+
+    /**
+     * Configure firewall rules for a node (add an IP/CIDR for Redis and Sentinel ports).
+     */
+    public function configureFirewall(): void
+    {
+        $this->validate([
+            'firewallNewIp' => 'required|string',
+        ]);
+
+        $node = RedisNode::findOrFail($this->firewallNodeId);
+        $sshService = app(SshService::class);
+
+        try {
+            $ip = trim($this->firewallNewIp);
+            $redisPort = $node->redis_port;
+            $sentinelPort = $node->sentinel_port;
+
+            $result = $sshService->exec(
+                $node,
+                "ufw allow from {$ip} to any port {$redisPort} proto tcp comment 'Redis from {$ip}' && ".
+                "ufw allow from {$ip} to any port {$sentinelPort} proto tcp comment 'Sentinel from {$ip}'",
+                'firewall.add_redis_rule',
+                sudo: true
+            );
+
+            if ($result['success']) {
+                $this->setMessage("Firewall rule added: {$ip} -> ports {$redisPort}, {$sentinelPort}", 'success');
+                $this->firewallNewIp = '';
+                $this->loadFirewallRules($this->firewallNodeId);
+            } else {
+                $this->setMessage('Failed to add firewall rule: '.($result['output'] ?? 'Unknown error'), 'error');
+            }
+        } catch (\Throwable $e) {
+            $this->setMessage("Error: {$e->getMessage()}", 'error');
+        }
+    }
+
+    // ─── Rename ─────────────────────────────────────────────────────────
+
+    /**
+     * Start renaming a node.
+     */
+    public function startRename(int $nodeId): void
+    {
+        $node = RedisNode::findOrFail($nodeId);
+        $this->renamingNodeId = $nodeId;
+        $this->renameValue = $node->name;
+    }
+
+    /**
+     * Save the new node name.
+     */
+    public function saveRename(): void
+    {
+        if (! $this->renamingNodeId) {
+            return;
+        }
+
+        $this->validate([
+            'renameValue' => 'required|string|max:255',
+        ]);
+
+        $node = RedisNode::findOrFail($this->renamingNodeId);
+        $node->update(['name' => $this->renameValue]);
+
+        $this->renamingNodeId = null;
+        $this->renameValue = '';
+        $this->cluster->refresh();
+    }
+
+    /**
+     * Cancel renaming.
+     */
+    public function cancelRename(): void
+    {
+        $this->renamingNodeId = null;
+        $this->renameValue = '';
+    }
+
+    // ─── SSH Test ───────────────────────────────────────────────────────
+
+    /**
+     * Test SSH connection to the new node being added.
+     */
+    public function testSsh(): void
+    {
+        $privateKey = $this->addNodeSshKeyMode === 'generate'
+            ? ($this->addNodeKeyPair['private'] ?? '')
+            : $this->addNodePrivateKey;
+
+        if (empty($privateKey)) {
+            $this->sshTestResult = 'failed';
+
+            return;
+        }
+
+        try {
+            $sshService = app(SshService::class);
+            $result = $sshService->testConnectionDirect(
+                $this->addNodeHost,
+                $this->addNodeSshPort,
+                $this->addNodeSshUser,
+                $privateKey,
+            );
+
+            $this->sshTestResult = $result['success'] ? 'success' : 'failed';
+        } catch (\Throwable $e) {
+            $this->sshTestResult = 'failed';
+        }
+    }
+
+    // ─── Firewall Actions ───────────────────────────────────────────────
+
+    /**
+     * Add a single firewall rule for a new IP.
+     */
+    public function addFirewallRule(): void
+    {
+        $this->configureFirewall();
+    }
+
+    /**
+     * Remove a specific firewall rule by number.
+     */
+    public function removeFirewallRule(int $ruleNumber): void
+    {
+        $node = RedisNode::findOrFail($this->firewallNodeId);
+        $sshService = app(SshService::class);
+
+        try {
+            $result = $sshService->exec(
+                $node,
+                "ufw --force delete {$ruleNumber} 2>&1",
+                'firewall.delete_rule',
+                sudo: true
+            );
+
+            if ($result['success']) {
+                $this->setMessage('Firewall rule removed.', 'success');
+                $this->loadFirewallRules($this->firewallNodeId);
+            } else {
+                $this->setMessage('Failed to remove rule: '.($result['output'] ?? 'Unknown error'), 'error');
+            }
+        } catch (\Throwable $e) {
+            $this->setMessage("Error: {$e->getMessage()}", 'error');
+        }
+    }
+
+    /**
+     * Configure all cluster nodes' firewalls to allow each other.
+     */
+    public function configureAllFirewallRules(): void
+    {
+        try {
+            $firewallService = app(FirewallService::class);
+            $node = RedisNode::findOrFail($this->firewallNodeId);
+            $firewallService->configureRedisNode($node, $this->cluster);
+
+            $this->setMessage('Firewall configured with all cluster node IPs.', 'success');
+            $this->loadFirewallRules($this->firewallNodeId);
+        } catch (\Throwable $e) {
+            $this->setMessage("Error: {$e->getMessage()}", 'error');
+        }
+    }
+
+    /**
+     * Retry adding a node that failed provisioning.
+     */
+    public function retryAddNode(int $nodeId): void
+    {
+        $node = RedisNode::findOrFail($nodeId);
+        $node->update(['status' => 'unknown', 'role' => 'pending']);
+
+        Cache::forget(AddRedisNodeJob::progressKey($node->id));
+        AddRedisNodeJob::dispatch($this->cluster, $node);
+
+        $this->addingNode = true;
+        $this->addNodeComplete = false;
+        $this->addingNodeId = $node->id;
+        $this->addNodeSteps = [
+            ['message' => "Retrying provisioning for {$node->name}...", 'status' => 'running', 'time' => now()->format('H:i:s')],
+        ];
+    }
+
+    // ─── Cluster Actions ────────────────────────────────────────────────
+
+    /**
+     * Delete a cluster and all its nodes.
+     */
+    public function deleteCluster()
+    {
+        $name = $this->cluster->name;
+        $this->cluster->nodes()->delete();
+        $this->cluster->auditLogs()->delete();
+        $this->cluster->delete();
+
+        session()->flash('message', "Redis cluster '{$name}' deleted.");
+
+        return redirect()->route('dashboard');
+    }
+
+    // ─── Helpers ────────────────────────────────────────────────────────
+
+    protected function setMessage(string $message, string $status): void
+    {
+        $this->actionMessage = $message;
+        $this->actionStatus = $status;
+    }
+
+    protected function resetAddNodeForm(): void
+    {
+        $this->showAddNodeModal = false;
+        $this->addNodeServerMode = 'new';
+        $this->addNodeSelectedServerId = null;
+        $this->addNodeHost = '';
+        $this->addNodeName = '';
+        $this->addNodeSshPort = 22;
+        $this->addNodeSshUser = 'root';
+        $this->addNodeRedisPort = 6379;
+        $this->addNodeSentinelPort = 26379;
+        $this->addNodeKeyPair = null;
+        $this->addNodePrivateKey = '';
+        $this->sshTestResult = '';
+    }
+
+    public function render()
+    {
+        // Exclude servers already used as Redis nodes in this cluster (by ID and by host IP)
+        $usedServerIds = $this->cluster->nodes()->pluck('server_id');
+        $usedHosts = Server::whereIn('id', $usedServerIds)->pluck('host');
+
+        $availableServers = Server::whereNotNull('ssh_private_key_encrypted')
+            ->whereNotIn('id', $usedServerIds)
+            ->whereNotIn('host', $usedHosts)
+            ->orderBy('name')
+            ->get();
+
+        return view('livewire.redis-cluster-manager', [
+            'availableServers' => $availableServers,
+        ])->layout('layouts.app', ['title' => $this->cluster->name]);
+    }
+}

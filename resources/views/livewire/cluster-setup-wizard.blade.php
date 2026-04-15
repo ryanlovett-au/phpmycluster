@@ -1,10 +1,18 @@
     <div class="mx-auto max-w-2xl">
         <div class="mb-8">
+            <div class="mb-4 flex items-center gap-3">
+                <div class="flex size-10 items-center justify-center rounded-lg bg-blue-500/10">
+                    <flux:icon.circle-stack class="size-6 text-blue-500" />
+                </div>
+                @if($isReprovision)
+                    <flux:heading size="xl">{{ __('Re-provision Cluster: :name', ['name' => $clusterName]) }}</flux:heading>
+                @else
+                    <flux:heading size="xl">{{ __('Create MySQL Cluster') }}</flux:heading>
+                @endif
+            </div>
             @if($isReprovision)
-                <flux:heading size="xl">{{ __('Re-provision Cluster: :name', ['name' => $clusterName]) }}</flux:heading>
                 <flux:text class="mt-1">{{ __('Re-configure the SSH key and re-run provisioning for this cluster.') }}</flux:text>
             @else
-                <flux:heading size="xl">{{ __('Create InnoDB Cluster') }}</flux:heading>
                 <flux:text class="mt-1">{{ __('This wizard will guide you through setting up a new MySQL InnoDB Cluster from scratch.') }}</flux:text>
             @endif
         </div>
@@ -204,7 +212,7 @@
                             <dt class="text-zinc-500">{{ __('Primary Node') }}</dt>
                             <dd>{{ $seedHost }}:{{ $seedMysqlPort }}</dd>
                             <dt class="text-zinc-500">{{ __('SSH') }}</dt>
-                            <dd>{{ $seedSshUser }}@{{ $seedHost }}:{{ $seedSshPort }}</dd>
+                            <dd>{{ $seedSshUser . '@' . $seedHost . ':' . $seedSshPort }}</dd>
                             <dt class="text-zinc-500">{{ __('Admin User') }}</dt>
                             <dd>{{ $clusterAdminUser }}</dd>
                         </dl>
@@ -269,7 +277,7 @@
                     <flux:callout variant="success" icon="check-circle" class="mt-6">
                         <flux:callout.heading>{{ __('Cluster Created Successfully!') }}</flux:callout.heading>
                         <flux:callout.text>
-                            <flux:button variant="primary" href="{{ route('cluster.manage', $clusterId) }}" wire:navigate class="mt-2">
+                            <flux:button variant="primary" href="{{ route('mysql.manage', $clusterId) }}" wire:navigate class="mt-2">
                                 {{ __('Go to Cluster Manager') }}
                             </flux:button>
                         </flux:callout.text>

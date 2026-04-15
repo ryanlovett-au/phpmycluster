@@ -1,9 +1,9 @@
 <?php
 
-use App\Enums\NodeRole;
+use App\Enums\MysqlNodeRole;
 
 it('has all expected values', function () {
-    $cases = array_map(fn ($case) => $case->value, NodeRole::cases());
+    $cases = array_map(fn ($case) => $case->value, MysqlNodeRole::cases());
 
     expect($cases)->toContain('pending');
     expect($cases)->toContain('primary');

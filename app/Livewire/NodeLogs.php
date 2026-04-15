@@ -2,13 +2,13 @@
 
 namespace App\Livewire;
 
-use App\Models\Node;
+use App\Models\MysqlNode;
 use App\Services\LogStreamService;
 use Livewire\Component;
 
 class NodeLogs extends Component
 {
-    public Node $node;
+    public MysqlNode $node;
 
     public string $logType = 'error'; // error, slow, general, systemd, router
 
@@ -20,7 +20,7 @@ class NodeLogs extends Component
 
     public bool $loading = false;
 
-    public function mount(Node $node)
+    public function mount(MysqlNode $node)
     {
         $this->node = $node;
     }

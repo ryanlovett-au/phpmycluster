@@ -1,9 +1,9 @@
 <?php
 
-use App\Enums\NodeStatus;
+use App\Enums\MysqlNodeStatus;
 
 it('has all expected values', function () {
-    $cases = array_map(fn ($case) => $case->value, NodeStatus::cases());
+    $cases = array_map(fn ($case) => $case->value, MysqlNodeStatus::cases());
 
     expect($cases)->toContain('unknown');
     expect($cases)->toContain('online');

@@ -35,19 +35,22 @@ PHPMyCluster uses [Pest PHP](https://pestphp.com/) for testing with [pcov](https
 tests/
 ├── Pest.php                          # Test configuration, helpers, RefreshDatabase
 ├── Unit/
-│   ├── Enums/                        # Enum label/value tests
+│   ├── Enums/                        # Enum label/value tests (MySQL + Redis enums)
 │   ├── Jobs/                         # Job dispatch, handle, and trait tests
 │   ├── Models/                       # Relationships, casts, fillable, hidden
 │   ├── Providers/                    # Service provider registration
 │   ├── Security/                     # AuditReport tool tests
 │   └── Services/                     # Service classes with mocked SSH
-│       └── MysqlShellServiceTest.php # Includes input validation/injection tests
+│       ├── MysqlShellServiceTest.php # Includes input validation/injection tests
+│       └── RedisCliServiceTest.php   # Redis CLI command construction tests
 └── Feature/
     ├── Auth/                         # First user auto-approval
     ├── Middleware/                    # EnsureUserIsApproved middleware
     ├── Settings/                     # Profile and security settings
-    ├── ClusterManagerFullTest.php    # Full Livewire component tests
+    ├── ClusterManagerFullTest.php    # MySQL Livewire component tests
     ├── ClusterSetupWizardFullTest.php
+    ├── RedisClusterManagerTest.php   # Redis Livewire component tests
+    ├── RedisSetupWizardTest.php
     ├── SecurityAuditCommandTest.php  # Artisan command tests
     └── ...
 ```
@@ -72,24 +75,37 @@ Since PHPMyCluster manages remote servers via SSH, all service tests use **Mocke
 
 - **SshService** — SSH2/SFTP mocked via `Mockery::mock(SSH2::class)`
 - **MysqlShellService** — SshService injected and mocked
+- **RedisCliService** — SshService injected and mocked
 - **FirewallService** — SshService injected and mocked
 - **NodeProvisionService** — SshService and Http facade mocked (includes auto-tuning detection)
-- **Jobs** — All services mocked via constructor injection
+- **Jobs** — All services mocked via constructor injection (MySQL and Redis provisioning jobs)
 - **Livewire components** — Services mocked via `$this->mock(Service::class)`
 - **Input Validation** — `validateIdentifier()` tested with 9 injection vectors (semicolons, backticks, quotes, `$(...)`, pipes, etc.)
 - **Model Security** — `$fillable` and `$hidden` attributes verified on all models
 
 ## Model Factories
 
-```php
-Cluster::factory()->online()->create()      // Online cluster
-Cluster::factory()->degraded()->create()    // Degraded cluster
-Cluster::factory()->offline()->create()     // Offline cluster
+### MySQL
 
-Node::factory()->primary()->create()        // Primary DB node
-Node::factory()->secondary()->create()      // Secondary DB node
-Node::factory()->access()->create()         // Router/access node
-Node::factory()->access()->offline()->create() // Offline router
+```php
+MysqlCluster::factory()->online()->create()      // Online cluster
+MysqlCluster::factory()->degraded()->create()    // Degraded cluster
+MysqlCluster::factory()->offline()->create()     // Offline cluster
+
+MysqlNode::factory()->primary()->create()        // Primary DB node
+MysqlNode::factory()->secondary()->create()      // Secondary DB node
+MysqlNode::factory()->access()->create()         // Router/access node
+MysqlNode::factory()->access()->offline()->create() // Offline router
+```
+
+### Redis
+
+```php
+RedisCluster::factory()->online()->create()      // Online cluster
+RedisCluster::factory()->offline()->create()     // Offline cluster
+
+RedisNode::factory()->master()->create()         // Master node
+RedisNode::factory()->replica()->create()        // Replica node
 ```
 
 ## Code Coverage

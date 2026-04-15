@@ -10,19 +10,14 @@ return new class extends Migration
     {
         Schema::create('nodes', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('server_id')->constrained()->cascadeOnDelete();
             $table->foreignId('cluster_id')->nullable()->constrained()->nullOnDelete();
             $table->string('name');
-            $table->string('host'); // IP or hostname
-            $table->integer('ssh_port')->default(22);
-            $table->string('ssh_user')->default('root');
-            $table->text('ssh_private_key_encrypted')->nullable();
-            $table->text('ssh_public_key')->nullable();
-            $table->string('ssh_key_fingerprint')->nullable();
             $table->integer('mysql_port')->default(3306);
             $table->integer('mysql_x_port')->default(33060);
             $table->string('role')->default('pending'); // pending, primary, secondary, access (router node)
             $table->string('status')->default('unknown'); // unknown, online, recovering, offline, error, unreachable
-            $table->integer('server_id')->nullable(); // unique server-id for MySQL config
+            $table->integer('mysql_server_id')->nullable(); // unique server-id for MySQL replication config
             $table->boolean('mysql_installed')->default(false);
             $table->boolean('mysql_shell_installed')->default(false);
             $table->boolean('mysql_router_installed')->default(false);

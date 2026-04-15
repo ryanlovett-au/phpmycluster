@@ -1,7 +1,7 @@
 <?php
 
 use App\Jobs\RefreshDbStatusJob;
-use App\Models\Cluster;
+use App\Models\MysqlCluster;
 use Illuminate\Bus\Batchable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -13,21 +13,21 @@ it('uses the Batchable trait', function () {
 });
 
 it('has a timeout of 120 seconds', function () {
-    $cluster = Cluster::factory()->create();
+    $cluster = MysqlCluster::factory()->create();
     $job = new RefreshDbStatusJob($cluster);
 
     expect($job->timeout)->toBe(120);
 });
 
 it('has tries set to 1', function () {
-    $cluster = Cluster::factory()->create();
+    $cluster = MysqlCluster::factory()->create();
     $job = new RefreshDbStatusJob($cluster);
 
     expect($job->tries)->toBe(1);
 });
 
 it('can be serialized', function () {
-    $cluster = Cluster::factory()->create();
+    $cluster = MysqlCluster::factory()->create();
     $job = new RefreshDbStatusJob($cluster);
 
     $serialized = serialize($job);
@@ -38,9 +38,9 @@ it('can be serialized', function () {
 });
 
 it('accepts a Cluster model in the constructor', function () {
-    $cluster = Cluster::factory()->create();
+    $cluster = MysqlCluster::factory()->create();
     $job = new RefreshDbStatusJob($cluster);
 
-    expect($job->cluster)->toBeInstanceOf(Cluster::class);
+    expect($job->cluster)->toBeInstanceOf(MysqlCluster::class);
     expect($job->cluster->id)->toBe($cluster->id);
 });

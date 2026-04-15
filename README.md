@@ -5,36 +5,63 @@
 <h1 align="center">PHPMyCluster</h1>
 
 <p align="center">
-  A web-based management tool for MySQL InnoDB Clusters.<br>
-  Deploy, monitor, and manage highly available MySQL clusters from a single control panel — all over SSH.
+  A web-based management tool for MySQL InnoDB Clusters and Redis Sentinel clusters.<br>
+  Deploy, monitor, and manage highly available database and cache clusters from a single control panel — all over SSH.
 </p>
 
 Built with Laravel 13, Livewire 3, Flux UI, and Tailwind CSS.
 
 ## Screenshots
 
-**Cluster Overview** — Real-time node health, replication status, and transaction sync at a glance.
+**MySQL Cluster Overview** — Real-time node health, replication status, and transaction sync at a glance.
 
-![Cluster Overview](screenshots/cluster.png)
+![MySQL Cluster Overview](screenshots/cluster.png)
+
+**Redis Cluster Overview** — Master/replica topology, memory usage, connected clients, and replication offsets.
+
+![Redis Cluster Overview](screenshots/redis.png)
 
 **Add New Node** — Add a DB node by entering its SSH details. PHPMyCluster generates a key pair and provides the command to authorise it on the server.
 
 ![Add New Node](screenshots/newnode.png)
 
-**Routers, Users & Recovery** — Manage MySQL Routers, database users, and run recovery actions like force quorum and reboot from outage.
+**Existing Server Selection** — When adding a Redis node, reuse an existing server that already has SSH keys configured.
 
-![Routers, Users & Recovery](screenshots/recovery.png)
+![Existing Server Selection](screenshots/existingnode.png)
+
+**MySQL Routers, Users & Recovery** — Manage MySQL Routers, database users, and run recovery actions like force quorum and reboot from outage.
+
+![MySQL Routers, Users & Recovery](screenshots/recovery.png)
+
+**Redis Recovery & Maintenance** — Sentinel failover, force resync replicas, restart services, trigger BGSAVE, AOF rewrite, memory purge, and flush Sentinel config.
+
+![Redis Recovery & Maintenance](screenshots/redisrecovery.png)
 
 ## Features
+
+### MySQL InnoDB Cluster
 
 - **Cluster Provisioning** — Create InnoDB Clusters from scratch on fresh Debian/Ubuntu servers. Installs MySQL from the official APT repository, configures Group Replication, and bootstraps the cluster via SSH.
 - **Health Monitoring** — Real-time cluster status, node health checks, replication lag tracking, and transaction sync indicators via `cluster.status({extended: 2})`.
 - **Recovery Tools** — Force quorum, reboot from complete outage, rejoin lost nodes, and rescan topology using the MySQL Shell AdminAPI.
 - **MySQL Router** — Bootstrap and manage MySQL Router on dedicated access nodes. Automatic read/write splitting and transparent failover.
-- **Firewall Management** — Automatic UFW configuration with dynamic IP allowlists. Ports are opened only between cluster nodes.
-- **Log Streaming** — Stream error logs, slow query logs, general logs, and systemd journals from any node in real time.
 - **MySQL User Management** — Create, edit, and drop MySQL users with privilege presets. Create databases directly from the UI.
 - **MySQL Auto-Tuning** — Detects server hardware (RAM, CPU cores, OS) during provisioning and generates an optimised `my.cnf` — buffer pool, redo log, connections, parallelism, and more are all scaled to the node's resources.
+
+### Redis Sentinel
+
+- **Sentinel Provisioning** — Deploy Redis master/replica clusters with Sentinel for automatic failover. Installs Redis, configures replication, and sets up Sentinel monitoring on each node.
+- **Health Monitoring** — Real-time node status, memory usage, connected clients, replication offsets, uptime, and master link status.
+- **Recovery Tools** — Sentinel failover, force resync replicas, reset Sentinel state, restart Redis and Sentinel services per node.
+- **Maintenance Actions** — Trigger BGSAVE (RDB snapshots), AOF rewrite, memory purge, and flush Sentinel config to disk across all nodes.
+- **Automatic Failover** — Sentinel monitors the master and automatically promotes a replica if it goes down. Manual failover can be triggered from the UI.
+
+### Shared Capabilities
+
+- **Firewall Management** — Automatic UFW configuration with dynamic IP allowlists. Ports are opened only between cluster nodes.
+- **Log Streaming** — Stream error logs, slow query logs, general logs, Redis/Sentinel logs, and systemd journals from any node in real time.
+- **Audit Logging** — Every SSH command and cluster operation is logged with timestamps, durations, and outcomes.
+- **Server Reuse** — Servers with existing SSH keys can be shared across clusters. Add a node to any cluster using a server that's already configured.
 - **Async Operations** — Long-running tasks (provisioning, status refresh) run as queued jobs with real-time progress tracking.
 
 ## Requirements
@@ -148,27 +175,28 @@ PHPMyCluster runs on a **separate control node** and manages your cluster infras
 │    Control Node      │
 │ PHPMyCluster + SQLite│
 └──────────┬──────────┘
-           │ SSH + mysqlsh
-           │
-    ┌──────┴──────┐
-    │             │
-┌───▼───┐  ┌─────▼─────┐  ┌───────────┐
-│Primary│  │ Secondary  │  │ Secondary │
-│  R/W  │  │    R/O     │  │    R/O    │
-└───┬───┘  └─────┬──────┘  └─────┬─────┘
-    │   Group Replication        │
-    └────────────┬───────────────┘
-                 │
-          ┌──────▼──────┐
-          │MySQL Router │
-          │:6446 R/W    │
-          │:6447 R/O    │
-          └──────┬──────┘
-                 │
-          ┌──────▼──────┐
-          │    Your     │
-          │ Application │
-          └─────────────┘
+           │ SSH
+     ┌─────┴─────┐
+     │           │
+     ▼           ▼
+┌─────────┐ ┌─────────┐
+│  MySQL  │ │  Redis  │
+│ InnoDB  │ │Sentinel │
+│ Cluster │ │ Cluster │
+└────┬────┘ └────┬────┘
+     │           │
+     ▼           ▼
+┌─────────────────────────────────────────┐
+│           Target Servers                │
+│                                         │
+│  MySQL:  Primary ↔ Secondary ↔ Secondary│
+│          Group Replication              │
+│          MySQL Router (:6446 / :6447)   │
+│                                         │
+│  Redis:  Master ↔ Replica ↔ Replica    │
+│          Sentinel Monitoring (:26379)   │
+│          Automatic Failover             │
+└─────────────────────────────────────────┘
 ```
 
 ## Key Technologies
@@ -178,9 +206,10 @@ PHPMyCluster runs on a **separate control node** and manages your cluster infras
 | Backend | Laravel 13 |
 | Frontend | Livewire 3 + Flux UI |
 | Styling | Tailwind CSS v4 |
-| Database | SQLite (app) / MySQL 8.4 (clusters) |
+| Database | SQLite (app) / MySQL 8.4 (clusters) / Redis (cache clusters) |
 | SSH | phpseclib3 |
-| Cluster Management | MySQL Shell AdminAPI (JS mode) |
+| MySQL Cluster | MySQL Shell AdminAPI (JS mode) |
+| Redis Cluster | Redis Sentinel + redis-cli |
 | Queue | Laravel database driver |
 
 ## SSH Key Setup
@@ -190,7 +219,7 @@ PHPMyCluster connects to your servers via SSH. You can either:
 1. **Generate a key pair** during cluster setup (the public key is displayed for you to add to each server's `~/.ssh/authorized_keys`)
 2. **Provide an existing private key** during cluster setup
 
-The SSH user must have `sudo` privileges on all target servers, as PHPMyCluster needs root access to install packages and configure MySQL.
+The SSH user must have `sudo` privileges on all target servers, as PHPMyCluster needs root access to install packages and configure services.
 
 ## MySQL Shell
 

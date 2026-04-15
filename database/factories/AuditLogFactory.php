@@ -3,8 +3,8 @@
 namespace Database\Factories;
 
 use App\Models\AuditLog;
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -17,7 +17,7 @@ class AuditLogFactory extends Factory
     public function definition(): array
     {
         return [
-            'cluster_id' => Cluster::factory(),
+            'cluster_id' => MysqlCluster::factory(),
             'node_id' => null,
             'action' => 'test_action',
             'status' => 'success',
@@ -31,7 +31,7 @@ class AuditLogFactory extends Factory
     /**
      * Associate the audit log with a specific node.
      */
-    public function forNode(Node $node): static
+    public function forNode(MysqlNode $node): static
     {
         return $this->state(fn () => [
             'cluster_id' => $node->cluster_id,

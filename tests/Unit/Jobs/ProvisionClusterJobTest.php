@@ -1,29 +1,29 @@
 <?php
 
-use App\Enums\ClusterStatus;
-use App\Enums\NodeRole;
-use App\Enums\NodeStatus;
+use App\Enums\MysqlClusterStatus;
+use App\Enums\MysqlNodeRole;
+use App\Enums\MysqlNodeStatus;
 use App\Jobs\ProvisionClusterJob;
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
 use App\Services\FirewallService;
+use App\Services\MysqlProvisionService;
 use App\Services\MysqlShellService;
-use App\Services\NodeProvisionService;
 use App\Services\SshService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 it('has a timeout of 1800 seconds', function () {
-    $cluster = Cluster::factory()->create();
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->create();
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
     $job = new ProvisionClusterJob($cluster, $node, 'root-pass', 'admin-pass');
 
     expect($job->timeout)->toBe(1800);
 });
 
 it('has tries set to 1', function () {
-    $cluster = Cluster::factory()->create();
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->create();
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
     $job = new ProvisionClusterJob($cluster, $node, 'root-pass', 'admin-pass');
 
     expect($job->tries)->toBe(1);
@@ -36,11 +36,11 @@ it('returns the correct progress key format', function () {
 });
 
 it('provisions a new cluster successfully', function () {
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
     ]);
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
 
     $job = Mockery::mock(ProvisionClusterJob::class, [$cluster, $node, 'rootpass', 'adminpass'])
         ->makePartial()
@@ -65,7 +65,7 @@ it('provisions a new cluster successfully', function () {
         'raw_output' => '',
     ]);
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $sshService = Mockery::mock(SshService::class);
 
     $job->handle($provisionService, $firewallService, $mysqlShell, $sshService);
@@ -73,9 +73,9 @@ it('provisions a new cluster successfully', function () {
     $node->refresh();
     $cluster->refresh();
 
-    expect($node->role)->toBe(NodeRole::Primary);
-    expect($node->status)->toBe(NodeStatus::Online);
-    expect($cluster->status)->toBe(ClusterStatus::Online);
+    expect($node->role)->toBe(MysqlNodeRole::Primary);
+    expect($node->status)->toBe(MysqlNodeStatus::Online);
+    expect($cluster->status)->toBe(MysqlClusterStatus::Online);
     expect($cluster->last_status_json)->toBe(['clusterName' => 'test-cluster']);
 
     $progress = Cache::get(ProvisionClusterJob::progressKey($cluster->id));
@@ -83,11 +83,11 @@ it('provisions a new cluster successfully', function () {
 });
 
 it('provisions with an existing cluster and fetches status', function () {
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
     ]);
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
 
     $job = Mockery::mock(ProvisionClusterJob::class, [$cluster, $node, 'rootpass', 'adminpass'])
         ->makePartial()
@@ -108,7 +108,7 @@ it('provisions with an existing cluster and fetches status', function () {
         'data' => ['clusterName' => 'existing-cluster', 'status' => 'OK'],
     ]);
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $sshService = Mockery::mock(SshService::class);
 
     $job->handle($provisionService, $firewallService, $mysqlShell, $sshService);
@@ -116,18 +116,18 @@ it('provisions with an existing cluster and fetches status', function () {
     $node->refresh();
     $cluster->refresh();
 
-    expect($node->role)->toBe(NodeRole::Primary);
-    expect($node->status)->toBe(NodeStatus::Online);
-    expect($cluster->status)->toBe(ClusterStatus::Online);
+    expect($node->role)->toBe(MysqlNodeRole::Primary);
+    expect($node->status)->toBe(MysqlNodeStatus::Online);
+    expect($cluster->status)->toBe(MysqlClusterStatus::Online);
     expect($cluster->last_status_json)->toHaveKey('clusterName', 'existing-cluster');
 });
 
 it('sets cluster to error when createCluster fails', function () {
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
     ]);
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
 
     $job = Mockery::mock(ProvisionClusterJob::class, [$cluster, $node, 'rootpass', 'adminpass'])
         ->makePartial()
@@ -147,7 +147,7 @@ it('sets cluster to error when createCluster fails', function () {
         'raw_output' => 'Connection refused',
     ]);
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $sshService = Mockery::mock(SshService::class);
 
     Log::shouldReceive('error')->once();
@@ -155,18 +155,18 @@ it('sets cluster to error when createCluster fails', function () {
     $job->handle($provisionService, $firewallService, $mysqlShell, $sshService);
 
     $cluster->refresh();
-    expect($cluster->status)->toBe(ClusterStatus::Error);
+    expect($cluster->status)->toBe(MysqlClusterStatus::Error);
 
     $progress = Cache::get(ProvisionClusterJob::progressKey($cluster->id));
     expect($progress['status'])->toBe('failed');
 });
 
 it('sets cluster to error when createCluster returns data error', function () {
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
     ]);
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
 
     $job = Mockery::mock(ProvisionClusterJob::class, [$cluster, $node, 'rootpass', 'adminpass'])
         ->makePartial()
@@ -186,7 +186,7 @@ it('sets cluster to error when createCluster returns data error', function () {
         'raw_output' => '',
     ]);
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $sshService = Mockery::mock(SshService::class);
 
     Log::shouldReceive('error')->once();
@@ -194,15 +194,15 @@ it('sets cluster to error when createCluster returns data error', function () {
     $job->handle($provisionService, $firewallService, $mysqlShell, $sshService);
 
     $cluster->refresh();
-    expect($cluster->status)->toBe(ClusterStatus::Error);
+    expect($cluster->status)->toBe(MysqlClusterStatus::Error);
 });
 
 it('sets cluster to error when provisionNode throws exception', function () {
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
     ]);
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
 
     $job = Mockery::mock(ProvisionClusterJob::class, [$cluster, $node, 'rootpass', 'adminpass'])
         ->makePartial()
@@ -214,7 +214,7 @@ it('sets cluster to error when provisionNode throws exception', function () {
 
     $firewallService = Mockery::mock(FirewallService::class);
     $mysqlShell = Mockery::mock(MysqlShellService::class);
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $sshService = Mockery::mock(SshService::class);
 
     Log::shouldReceive('error')->once();
@@ -222,7 +222,7 @@ it('sets cluster to error when provisionNode throws exception', function () {
     $job->handle($provisionService, $firewallService, $mysqlShell, $sshService);
 
     $cluster->refresh();
-    expect($cluster->status)->toBe(ClusterStatus::Error);
+    expect($cluster->status)->toBe(MysqlClusterStatus::Error);
 
     $progress = Cache::get(ProvisionClusterJob::progressKey($cluster->id));
     expect($progress['status'])->toBe('failed');
@@ -230,11 +230,11 @@ it('sets cluster to error when provisionNode throws exception', function () {
 });
 
 it('stores progress steps in cache during provisioning', function () {
-    $cluster = Cluster::factory()->create([
+    $cluster = MysqlCluster::factory()->create([
         'cluster_admin_user' => 'clusteradmin',
         'cluster_admin_password_encrypted' => 'testpass',
     ]);
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
 
     $job = Mockery::mock(ProvisionClusterJob::class, [$cluster, $node, 'rootpass', 'adminpass'])
         ->makePartial()
@@ -254,7 +254,7 @@ it('stores progress steps in cache during provisioning', function () {
         'raw_output' => '',
     ]);
 
-    $provisionService = Mockery::mock(NodeProvisionService::class);
+    $provisionService = Mockery::mock(MysqlProvisionService::class);
     $sshService = Mockery::mock(SshService::class);
 
     $job->handle($provisionService, $firewallService, $mysqlShell, $sshService);
@@ -272,8 +272,8 @@ it('stores progress steps in cache during provisioning', function () {
 });
 
 it('returns getRootPassword as the mysql root password', function () {
-    $cluster = Cluster::factory()->create();
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->create();
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
     $job = new ProvisionClusterJob($cluster, $node, 'my-root-pass', 'admin-pass');
 
     $reflection = new ReflectionMethod($job, 'getRootPassword');

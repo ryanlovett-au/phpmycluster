@@ -1,8 +1,8 @@
 <?php
 
 use App\Jobs\RefreshDbStatusJob;
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
 use Illuminate\Support\Facades\Bus;
 
 it('outputs a message when there are no active clusters', function () {
@@ -14,7 +14,7 @@ it('outputs a message when there are no active clusters', function () {
 it('dispatches jobs for online clusters', function () {
     Bus::fake();
 
-    Cluster::factory()->online()->create(['name' => 'Online Cluster']);
+    MysqlCluster::factory()->online()->create(['name' => 'Online Cluster']);
 
     $this->artisan('clusters:refresh-status')
         ->assertSuccessful();
@@ -27,7 +27,7 @@ it('dispatches jobs for online clusters', function () {
 it('dispatches jobs for degraded clusters', function () {
     Bus::fake();
 
-    Cluster::factory()->degraded()->create(['name' => 'Degraded Cluster']);
+    MysqlCluster::factory()->degraded()->create(['name' => 'Degraded Cluster']);
 
     $this->artisan('clusters:refresh-status')
         ->assertSuccessful();
@@ -40,7 +40,7 @@ it('dispatches jobs for degraded clusters', function () {
 it('does not dispatch jobs for offline clusters', function () {
     Bus::fake();
 
-    Cluster::factory()->offline()->create(['name' => 'Offline Cluster']);
+    MysqlCluster::factory()->offline()->create(['name' => 'Offline Cluster']);
 
     $this->artisan('clusters:refresh-status')
         ->expectsOutput('No active clusters to refresh.')
@@ -52,7 +52,7 @@ it('does not dispatch jobs for offline clusters', function () {
 it('does not dispatch jobs for pending clusters', function () {
     Bus::fake();
 
-    Cluster::factory()->create(['name' => 'Pending Cluster']);
+    MysqlCluster::factory()->create(['name' => 'Pending Cluster']);
 
     $this->artisan('clusters:refresh-status')
         ->expectsOutput('No active clusters to refresh.')
@@ -64,8 +64,8 @@ it('does not dispatch jobs for pending clusters', function () {
 it('includes router status jobs for clusters with access nodes', function () {
     Bus::fake();
 
-    $cluster = Cluster::factory()->online()->create(['name' => 'Cluster With Router']);
-    Node::factory()->access()->create([
+    $cluster = MysqlCluster::factory()->online()->create(['name' => 'Cluster With Router']);
+    MysqlNode::factory()->access()->create([
         'cluster_id' => $cluster->id,
         'name' => 'router-node-1',
     ]);
@@ -82,8 +82,8 @@ it('includes router status jobs for clusters with access nodes', function () {
 it('includes multiple router jobs for clusters with multiple access nodes', function () {
     Bus::fake();
 
-    $cluster = Cluster::factory()->online()->create(['name' => 'Multi Router Cluster']);
-    Node::factory()->access()->count(3)->create([
+    $cluster = MysqlCluster::factory()->online()->create(['name' => 'Multi Router Cluster']);
+    MysqlNode::factory()->access()->count(3)->create([
         'cluster_id' => $cluster->id,
     ]);
 

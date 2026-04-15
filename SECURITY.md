@@ -33,12 +33,12 @@ Any process with access to both the database and the `APP_KEY` can decrypt the S
 
 PHPMyCluster applies the following security measures:
 
-- **Input Validation** — All user-supplied identifiers (usernames, hostnames, database names) passed to MySQL Shell JS commands are validated against a strict allowlist (`[a-zA-Z0-9_.\-%@/]`). Invalid characters throw an `InvalidArgumentException` before any command is executed, preventing shell and SQL injection.
-- **Password Sanitisation** — Passwords embedded in MySQL Shell commands are escaped with `addslashes()` to handle quotes and backslashes safely within the JS/SQL nesting.
+- **Input Validation** — All user-supplied identifiers (usernames, hostnames, database names) passed to MySQL Shell JS commands are validated against a strict allowlist (`[a-zA-Z0-9_.\-%@/]`). Invalid characters throw an `InvalidArgumentException` before any command is executed, preventing shell and SQL injection. Redis commands use `escapeshellarg()` for all user-supplied values.
+- **Password Sanitisation** — Passwords embedded in MySQL Shell commands are escaped with `addslashes()` to handle quotes and backslashes safely within the JS/SQL nesting. Redis AUTH passwords are passed via `escapeshellarg()` in redis-cli commands.
 - **Mass Assignment Protection** — All Eloquent models use explicit `$fillable` arrays rather than `$guarded = []`, preventing unintended attribute assignment.
-- **Sensitive Data Hidden** — The `ssh_private_key_encrypted` attribute is listed in the Node model's `$hidden` array, preventing accidental exposure in JSON responses or logs.
+- **Sensitive Data Hidden** — The `ssh_private_key_encrypted` attribute is listed in the Server model's `$hidden` array, preventing accidental exposure in JSON responses or logs.
 - **Rate Limiting** — Web routes are throttled to 120 requests per minute per IP. Authentication routes (login, two-factor) have stricter dedicated rate limiters (5 per minute).
-- **Encrypted Storage** — SSH private keys, MySQL root passwords, and cluster admin passwords are stored with Laravel's `encrypted` cast (AES-256-CBC), requiring the `APP_KEY` to decrypt.
+- **Encrypted Storage** — SSH private keys, MySQL root passwords, cluster admin passwords, and Redis AUTH/Sentinel passwords are stored with Laravel's `encrypted` cast (AES-256-CBC), requiring the `APP_KEY` to decrypt.
 
 ## Security Best Practices
 
@@ -48,7 +48,7 @@ When deploying PHPMyCluster, please ensure:
 - **Protect your `.env` file** — it contains the `APP_KEY` used to decrypt SSH keys. Never commit it to version control. Set restrictive file permissions (`chmod 600`).
 - **Protect the SQLite database** — it contains encrypted SSH keys and cluster configuration. Ensure it is not accessible from the web server's document root and has restrictive file permissions.
 - **Use dedicated SSH keys** — generate keys specifically for PHPMyCluster rather than reusing personal keys. This makes it easy to revoke access if the control node is compromised.
-- **Limit SSH user privileges** — where possible, restrict the SSH user's sudo access to only the commands PHPMyCluster needs (MySQL, systemctl, ufw, apt).
+- **Limit SSH user privileges** — where possible, restrict the SSH user's sudo access to only the commands PHPMyCluster needs (MySQL, Redis, systemctl, ufw, apt).
 - **Run queue workers under a dedicated system user** — avoid running them as root.
 - **Keep dependencies up to date** — regularly run `composer update` and `npm update` to patch vulnerabilities.
 - **Back up your `APP_KEY`** — if you lose it, all encrypted SSH keys in the database become unrecoverable.

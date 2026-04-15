@@ -2,7 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Models\Cluster;
+use App\Models\MysqlCluster;
 use App\Services\MysqlShellService;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
@@ -22,7 +22,7 @@ class RefreshDbStatusJob implements ShouldQueue
     public int $tries = 1;
 
     public function __construct(
-        public Cluster $cluster,
+        public MysqlCluster $cluster,
     ) {}
 
     public function handle(MysqlShellService $mysqlShell): void
@@ -58,7 +58,7 @@ class RefreshDbStatusJob implements ShouldQueue
                     $topology = $result['data']['defaultReplicaSet']['topology'] ?? [];
                     foreach ($topology as $address => $memberData) {
                         $host = explode(':', $address)[0];
-                        $dbNode = $cluster->nodes()->where('host', $host)->first();
+                        $dbNode = $cluster->nodes()->whereHas('server', fn ($q) => $q->where('host', $host))->first();
                         if ($dbNode) {
                             $memberStatus = strtolower($memberData['status'] ?? 'unknown');
                             $role = strtolower($memberData['memberRole'] ?? 'secondary');

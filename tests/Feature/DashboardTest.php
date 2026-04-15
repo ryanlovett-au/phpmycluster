@@ -1,7 +1,7 @@
 <?php
 
 use App\Livewire\Dashboard;
-use App\Models\Cluster;
+use App\Models\MysqlCluster;
 use Illuminate\Support\Facades\Artisan;
 use Livewire\Livewire;
 
@@ -23,7 +23,7 @@ it('redirects an unapproved user away from the dashboard', function () {
 
 it('displays cluster cards on the dashboard', function () {
     $user = createApprovedUser();
-    $cluster = Cluster::factory()->online()->create(['name' => 'My Test Cluster']);
+    $cluster = MysqlCluster::factory()->online()->create(['name' => 'My Test Cluster']);
 
     Livewire::actingAs($user)
         ->test(Dashboard::class)

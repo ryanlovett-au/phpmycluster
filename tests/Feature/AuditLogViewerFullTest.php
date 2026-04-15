@@ -2,8 +2,8 @@
 
 use App\Livewire\AuditLogViewer;
 use App\Models\AuditLog;
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
 use Livewire\Livewire;
 
 // ─── Rendering ──────────────────────────────────────────────────────────────
@@ -18,8 +18,8 @@ it('renders the audit log heading', function () {
 
 it('renders audit log entries', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create(['name' => 'test-cluster']);
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create(['name' => 'test-cluster']);
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'name' => 'test-node',
     ]);
@@ -41,8 +41,8 @@ it('renders audit log entries', function () {
 
 it('renders multiple audit log entries', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     AuditLog::factory()->forNode($node)->create(['action' => 'ssh.test']);
     AuditLog::factory()->forNode($node)->create(['action' => 'mysql.configure']);
@@ -67,8 +67,8 @@ it('shows empty state when no logs exist', function () {
 
 it('filters by cluster id', function () {
     $user = createAdmin();
-    $cluster1 = Cluster::factory()->online()->create(['name' => 'cluster-one']);
-    $cluster2 = Cluster::factory()->online()->create(['name' => 'cluster-two']);
+    $cluster1 = MysqlCluster::factory()->online()->create(['name' => 'cluster-one']);
+    $cluster2 = MysqlCluster::factory()->online()->create(['name' => 'cluster-two']);
 
     AuditLog::factory()->create(['cluster_id' => $cluster1->id, 'action' => 'action-one']);
     AuditLog::factory()->create(['cluster_id' => $cluster2->id, 'action' => 'action-two']);
@@ -83,9 +83,9 @@ it('filters by cluster id', function () {
 
 it('filters by node id', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $node1 = Node::factory()->primary()->create(['cluster_id' => $cluster->id, 'name' => 'node-one']);
-    $node2 = Node::factory()->secondary()->create(['cluster_id' => $cluster->id, 'name' => 'node-two']);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node1 = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id, 'name' => 'node-one']);
+    $node2 = MysqlNode::factory()->secondary()->create(['cluster_id' => $cluster->id, 'name' => 'node-two']);
 
     AuditLog::factory()->forNode($node1)->create(['action' => 'log-for-node1']);
     AuditLog::factory()->forNode($node2)->create(['action' => 'log-for-node2']);
@@ -100,7 +100,7 @@ it('filters by node id', function () {
 
 it('filters by action text', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
+    $cluster = MysqlCluster::factory()->online()->create();
 
     AuditLog::factory()->create(['cluster_id' => $cluster->id, 'action' => 'mysql.install']);
     AuditLog::factory()->create(['cluster_id' => $cluster->id, 'action' => 'ssh.test']);
@@ -116,7 +116,7 @@ it('filters by action text', function () {
 
 it('filters by status', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
+    $cluster = MysqlCluster::factory()->online()->create();
 
     AuditLog::factory()->create(['cluster_id' => $cluster->id, 'action' => 'succeeded-action', 'status' => 'success']);
     AuditLog::factory()->create(['cluster_id' => $cluster->id, 'action' => 'failed-action', 'status' => 'failed']);
@@ -130,7 +130,7 @@ it('filters by status', function () {
 
 it('shows all statuses when filter is empty', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
+    $cluster = MysqlCluster::factory()->online()->create();
 
     AuditLog::factory()->create(['cluster_id' => $cluster->id, 'action' => 'action-success', 'status' => 'success']);
     AuditLog::factory()->create(['cluster_id' => $cluster->id, 'action' => 'action-failed', 'status' => 'failed']);
@@ -146,7 +146,7 @@ it('shows all statuses when filter is empty', function () {
 
 it('paginates audit logs at 25 per page', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
+    $cluster = MysqlCluster::factory()->online()->create();
 
     // Create 30 logs
     AuditLog::factory()->count(30)->create(['cluster_id' => $cluster->id]);
@@ -163,7 +163,7 @@ it('paginates audit logs at 25 per page', function () {
 
 it('displays command in audit log entry', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
+    $cluster = MysqlCluster::factory()->online()->create();
 
     AuditLog::factory()->create([
         'cluster_id' => $cluster->id,
@@ -179,7 +179,7 @@ it('displays command in audit log entry', function () {
 
 it('displays error message in failed audit log entry', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
+    $cluster = MysqlCluster::factory()->online()->create();
 
     AuditLog::factory()->create([
         'cluster_id' => $cluster->id,

@@ -1,15 +1,15 @@
 <?php
 
 use App\Livewire\NodeLogs;
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
 use App\Services\LogStreamService;
 use Livewire\Livewire;
 
 it('allows an approved user to view node logs', function () {
     $user = createApprovedUser();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $this->actingAs($user)
         ->get(route('node.logs', $node))
@@ -18,8 +18,8 @@ it('allows an approved user to view node logs', function () {
 
 it('mounts with the given node', function () {
     $user = createApprovedUser();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'name' => 'log-test-node',
     ]);
@@ -32,8 +32,8 @@ it('mounts with the given node', function () {
 
 it('handles unknown log type gracefully', function () {
     $user = createApprovedUser();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     Livewire::actingAs($user)
         ->test(NodeLogs::class, ['node' => $node])
@@ -45,8 +45,8 @@ it('handles unknown log type gracefully', function () {
 
 it('can switch log type via setLogType', function () {
     $user = createApprovedUser();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     // Mock the LogStreamService to avoid SSH calls
     $this->mock(LogStreamService::class, function ($mock) {
@@ -62,8 +62,8 @@ it('can switch log type via setLogType', function () {
 
 it('shows error output when log fetch returns error key', function () {
     $user = createApprovedUser();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $this->mock(LogStreamService::class, function ($mock) {
         $mock->shouldReceive('getErrorLog')->once()->andReturn(['error' => 'Connection refused']);

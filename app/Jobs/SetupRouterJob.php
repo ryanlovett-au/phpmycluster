@@ -2,10 +2,10 @@
 
 namespace App\Jobs;
 
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
 use App\Services\FirewallService;
-use App\Services\NodeProvisionService;
+use App\Services\MysqlProvisionService;
 use App\Services\SshService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -27,8 +27,8 @@ class SetupRouterJob implements ShouldQueue
     public int $tries = 1;
 
     public function __construct(
-        public Cluster $cluster,
-        public Node $node,
+        public MysqlCluster $cluster,
+        public MysqlNode $node,
         public string $allowFrom = 'any',
     ) {}
 
@@ -44,7 +44,7 @@ class SetupRouterJob implements ShouldQueue
      * Execute the job.
      */
     public function handle(
-        NodeProvisionService $provisionService,
+        MysqlProvisionService $provisionService,
         FirewallService $firewallService,
         SshService $sshService,
     ): void {
@@ -54,7 +54,7 @@ class SetupRouterJob implements ShouldQueue
         try {
             // Step 1: Test SSH connection
             $this->addStep('Testing SSH connection...');
-            $testResult = $sshService->testConnection($node);
+            $testResult = $sshService->testConnection($node->server);
             if (! $testResult['success']) {
                 throw new \RuntimeException('SSH connection failed: '.($testResult['error'] ?? 'Unknown error'));
             }
@@ -95,7 +95,7 @@ class SetupRouterJob implements ShouldQueue
             foreach ($cluster->dbNodes as $dbNode) {
                 $sshService->exec(
                     $dbNode,
-                    "ufw allow from {$node->host} to any port {$dbNode->mysql_port} proto tcp comment 'MySQL from router {$node->name}'",
+                    "ufw allow from {$node->server->host} to any port {$dbNode->mysql_port} proto tcp comment 'MySQL from router {$node->name}'",
                     'firewall.rule',
                     sudo: true
                 );

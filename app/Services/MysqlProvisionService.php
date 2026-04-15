@@ -2,8 +2,7 @@
 
 namespace App\Services;
 
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlNode;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -11,7 +10,7 @@ use Illuminate\Support\Facades\Log;
  * Handles provisioning a fresh Debian/Ubuntu node with MySQL 8.4,
  * MySQL Shell, and MySQL Router from the official MySQL APT repository.
  */
-class NodeProvisionService
+class MysqlProvisionService
 {
     /**
      * Base URL for the MySQL repo directory listing.
@@ -30,7 +29,7 @@ class NodeProvisionService
     /**
      * Detect the OS on the node.
      */
-    public function detectOs(Node $node): array
+    public function detectOs(MysqlNode $node): array
     {
         $result = $this->ssh->exec($node, 'cat /etc/os-release 2>/dev/null', 'provision.detect_os');
 
@@ -48,7 +47,7 @@ class NodeProvisionService
     /**
      * Detect system hardware (RAM, CPU cores, OS) and store on the node.
      */
-    public function detectSystemInfo(Node $node): array
+    public function detectSystemInfo(MysqlNode $node): array
     {
         // Get total RAM in MB
         $ramResult = $this->ssh->exec(
@@ -74,7 +73,7 @@ class NodeProvisionService
         );
         $osName = trim($osResult['output'] ?? '');
 
-        $node->update([
+        $node->server->update([
             'ram_mb' => $ramMb ?: null,
             'cpu_cores' => $cpuCores ?: null,
             'os_name' => $osName ?: null,
@@ -219,7 +218,7 @@ class NodeProvisionService
      * We explicitly remove any Ubuntu-packaged versions first and pin the
      * official MySQL repo at higher priority so apt always prefers it.
      */
-    public function installMysql(Node $node, ?string $aptConfigVersion = null, ?string $pinnedMysqlVersion = null): array
+    public function installMysql(MysqlNode $node, ?string $aptConfigVersion = null, ?string $pinnedMysqlVersion = null): array
     {
         $steps = [];
 
@@ -350,7 +349,7 @@ class NodeProvisionService
      * If the MySQL APT repo is not already configured, it will be set up first
      * to ensure we get the official MySQL Router package.
      */
-    public function installMysqlRouter(Node $node, ?string $aptConfigVersion = null): array
+    public function installMysqlRouter(MysqlNode $node, ?string $aptConfigVersion = null): array
     {
         // Check if the MySQL APT repo is already set up
         $repoCheck = $this->ssh->exec(
@@ -434,11 +433,11 @@ class NodeProvisionService
      * If the node has detected RAM/CPU info, performance tuning parameters
      * are calculated and included automatically.
      */
-    public function writeMysqlConfig(Node $node): array
+    public function writeMysqlConfig(MysqlNode $node): array
     {
-        $serverId = $node->server_id ?? $node->id;
-        $ramMb = $node->ram_mb ?? 0;
-        $cpuCores = $node->cpu_cores ?? 1;
+        $serverId = $node->mysql_server_id ?? $node->id;
+        $ramMb = $node->server->ram_mb ?? 0;
+        $cpuCores = $node->server->cpu_cores ?? 1;
 
         // Build performance tuning section if RAM is known
         $tuningSection = '';
@@ -470,7 +469,7 @@ EOT;
 
 [mysqld]
 server-id = {$serverId}
-report-host = {$node->host}
+report-host = {$node->server->host}
 
 # GTID
 gtid_mode = ON
@@ -523,7 +522,7 @@ EOT;
         );
 
         if ($result['success']) {
-            $node->update(['mysql_configured' => true, 'server_id' => $serverId]);
+            $node->update(['mysql_configured' => true, 'mysql_server_id' => $serverId]);
         }
 
         return $result;
@@ -532,7 +531,7 @@ EOT;
     /**
      * Restart MySQL service on a node.
      */
-    public function restartMysql(Node $node): array
+    public function restartMysql(MysqlNode $node): array
     {
         return $this->ssh->exec(
             $node,
@@ -545,7 +544,7 @@ EOT;
     /**
      * Bootstrap MySQL Router on a node and connect it to the cluster.
      */
-    public function bootstrapRouter(Node $node, Node $primaryNode, string $clusterAdminPassword): array
+    public function bootstrapRouter(MysqlNode $node, MysqlNode $primaryNode, string $clusterAdminPassword): array
     {
         // Create mysqlrouter system user if not exists
         $this->ssh->exec(
@@ -558,7 +557,7 @@ EOT;
         // Bootstrap the router
         $result = $this->ssh->exec(
             $node,
-            "mysqlrouter --bootstrap clusteradmin@{$primaryNode->host}:{$primaryNode->mysql_port} ".
+            "mysqlrouter --bootstrap clusteradmin@{$primaryNode->server->host}:{$primaryNode->mysql_port} ".
             '--user=mysqlrouter '.
             '--conf-bind-address=0.0.0.0 '.
             '--force '.
@@ -583,7 +582,7 @@ EOT;
     /**
      * Get MySQL Router status on a node.
      */
-    public function getRouterStatus(Node $node): array
+    public function getRouterStatus(MysqlNode $node): array
     {
         $result = $this->ssh->exec(
             $node,

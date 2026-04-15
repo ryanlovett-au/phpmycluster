@@ -1,22 +1,23 @@
 <?php
 
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
+use App\Models\Server;
 use App\Services\FirewallService;
 use App\Services\SshService;
 
 // --- Existing tests ---
 
 it('calls correct SSH command for getStatus', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action, bool $sudo) use ($node) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action, bool $sudo) use ($node) {
             return $n->id === $node->id
                 && str_contains($command, 'ufw status')
                 && $action === 'firewall.status'
@@ -36,8 +37,8 @@ it('calls correct SSH command for getStatus', function () {
 });
 
 it('detects UFW not installed', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
@@ -58,8 +59,8 @@ it('detects UFW not installed', function () {
 });
 
 it('detects UFW inactive', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
@@ -80,15 +81,15 @@ it('detects UFW inactive', function () {
 });
 
 it('calls correct SSH commands for installUfw', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
         ->once()
-        ->withArgs(function (Node $n, string $command, string $action, bool $sudo) use ($node) {
+        ->withArgs(function (MysqlNode $n, string $command, string $action, bool $sudo) use ($node) {
             return $n->id === $node->id
                 && str_contains($command, 'apt-get')
                 && str_contains($command, 'ufw')
@@ -110,8 +111,8 @@ it('calls correct SSH commands for installUfw', function () {
 // --- New tests ---
 
 it('getStatus returns output in result', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $sshMock->shouldReceive('exec')
@@ -130,18 +131,20 @@ it('getStatus returns output in result', function () {
 });
 
 it('configureDbNode opens SSH and MySQL ports for peer nodes', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node1 = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $server1 = Server::factory()->create(['host' => '10.0.0.1']);
+    $node1 = MysqlNode::factory()->primary()->create([
+        'server_id' => $server1->id,
         'cluster_id' => $cluster->id,
         'name' => 'db-1',
-        'host' => '10.0.0.1',
         'mysql_port' => 3306,
         'mysql_x_port' => 33060,
     ]);
-    $node2 = Node::factory()->secondary()->create([
+    $server2 = Server::factory()->create(['host' => '10.0.0.2']);
+    $node2 = MysqlNode::factory()->secondary()->create([
+        'server_id' => $server2->id,
         'cluster_id' => $cluster->id,
         'name' => 'db-2',
-        'host' => '10.0.0.2',
         'mysql_port' => 3306,
         'mysql_x_port' => 33060,
     ]);
@@ -151,7 +154,7 @@ it('configureDbNode opens SSH and MySQL ports for peer nodes', function () {
     // Track all exec calls
     $commands = [];
     $sshMock->shouldReceive('exec')
-        ->andReturnUsing(function (Node $n, string $command, string $action, bool $sudo = false) use (&$commands) {
+        ->andReturnUsing(function (MysqlNode $n, string $command, string $action, bool $sudo = false) use (&$commands) {
             $commands[] = ['node_id' => $n->id, 'command' => $command, 'action' => $action, 'sudo' => $sudo];
 
             return ['success' => true, 'output' => 'ok', 'exit_code' => 0];
@@ -192,17 +195,18 @@ it('configureDbNode opens SSH and MySQL ports for peer nodes', function () {
 });
 
 it('configureDbNode skips self when iterating peers', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node1 = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $server1 = Server::factory()->create(['host' => '10.0.0.1']);
+    $node1 = MysqlNode::factory()->primary()->create([
+        'server_id' => $server1->id,
         'cluster_id' => $cluster->id,
         'name' => 'db-1',
-        'host' => '10.0.0.1',
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
     $commands = [];
     $sshMock->shouldReceive('exec')
-        ->andReturnUsing(function (Node $n, string $command, string $action, bool $sudo = false) use (&$commands) {
+        ->andReturnUsing(function (MysqlNode $n, string $command, string $action, bool $sudo = false) use (&$commands) {
             $commands[] = $command;
 
             return ['success' => true, 'output' => 'ok', 'exit_code' => 0];
@@ -217,22 +221,24 @@ it('configureDbNode skips self when iterating peers', function () {
 });
 
 it('configureDbNode opens MySQL port for access nodes', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $dbNode = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $dbServer = Server::factory()->create(['host' => '10.0.0.1']);
+    $dbNode = MysqlNode::factory()->primary()->create([
+        'server_id' => $dbServer->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.1',
         'mysql_port' => 3306,
     ]);
-    $accessNode = Node::factory()->access()->create([
+    $accessServer = Server::factory()->create(['host' => '10.0.0.10']);
+    $accessNode = MysqlNode::factory()->access()->create([
+        'server_id' => $accessServer->id,
         'cluster_id' => $cluster->id,
         'name' => 'router-1',
-        'host' => '10.0.0.10',
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
     $commands = [];
     $sshMock->shouldReceive('exec')
-        ->andReturnUsing(function (Node $n, string $command, string $action, bool $sudo = false) use (&$commands) {
+        ->andReturnUsing(function (MysqlNode $n, string $command, string $action, bool $sudo = false) use (&$commands) {
             $commands[] = $command;
 
             return ['success' => true, 'output' => 'ok', 'exit_code' => 0];
@@ -247,16 +253,17 @@ it('configureDbNode opens MySQL port for access nodes', function () {
 });
 
 it('configureAccessNode opens SSH and router ports', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->access()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $accessServer = Server::factory()->create(['host' => '10.0.0.10']);
+    $node = MysqlNode::factory()->access()->create([
+        'server_id' => $accessServer->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.10',
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
     $commands = [];
     $sshMock->shouldReceive('exec')
-        ->andReturnUsing(function (Node $n, string $command, string $action, bool $sudo = false) use (&$commands) {
+        ->andReturnUsing(function (MysqlNode $n, string $command, string $action, bool $sudo = false) use (&$commands) {
             $commands[] = $command;
 
             return ['success' => true, 'output' => 'ok', 'exit_code' => 0];
@@ -285,13 +292,13 @@ it('configureAccessNode opens SSH and router ports', function () {
 });
 
 it('configureAccessNode uses custom allowFrom', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->access()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->access()->create(['cluster_id' => $cluster->id]);
 
     $sshMock = Mockery::mock(SshService::class);
     $commands = [];
     $sshMock->shouldReceive('exec')
-        ->andReturnUsing(function (Node $n, string $command, string $action, bool $sudo = false) use (&$commands) {
+        ->andReturnUsing(function (MysqlNode $n, string $command, string $action, bool $sudo = false) use (&$commands) {
             $commands[] = $command;
 
             return ['success' => true, 'output' => 'ok', 'exit_code' => 0];
@@ -309,22 +316,24 @@ it('configureAccessNode uses custom allowFrom', function () {
 });
 
 it('allowNewNodeOnCluster adds firewall rules on existing nodes', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $existingNode = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $existingServer = Server::factory()->create(['host' => '10.0.0.1']);
+    $existingNode = MysqlNode::factory()->primary()->create([
+        'server_id' => $existingServer->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.1',
         'mysql_port' => 3306,
     ]);
-    $newNode = Node::factory()->secondary()->create([
+    $newServer = Server::factory()->create(['host' => '10.0.0.3']);
+    $newNode = MysqlNode::factory()->secondary()->create([
+        'server_id' => $newServer->id,
         'cluster_id' => $cluster->id,
         'name' => 'db-new',
-        'host' => '10.0.0.3',
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
     $commands = [];
     $sshMock->shouldReceive('exec')
-        ->andReturnUsing(function (Node $n, string $command, string $action, bool $sudo = false) use (&$commands) {
+        ->andReturnUsing(function (MysqlNode $n, string $command, string $action, bool $sudo = false) use (&$commands) {
             $commands[] = ['node_id' => $n->id, 'command' => $command];
 
             return ['success' => true, 'output' => 'ok', 'exit_code' => 0];
@@ -349,16 +358,17 @@ it('allowNewNodeOnCluster adds firewall rules on existing nodes', function () {
 });
 
 it('allowNewNodeOnCluster skips self when new node already in dbNodes', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $nodeServer = Server::factory()->create(['host' => '10.0.0.1']);
+    $node = MysqlNode::factory()->primary()->create([
+        'server_id' => $nodeServer->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.1',
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
     $commands = [];
     $sshMock->shouldReceive('exec')
-        ->andReturnUsing(function (Node $n, string $command, string $action, bool $sudo = false) use (&$commands) {
+        ->andReturnUsing(function (MysqlNode $n, string $command, string $action, bool $sudo = false) use (&$commands) {
             $commands[] = $command;
 
             return ['success' => true, 'output' => 'ok', 'exit_code' => 0];
@@ -373,26 +383,29 @@ it('allowNewNodeOnCluster skips self when new node already in dbNodes', function
 });
 
 it('allowNewNodeOnCluster updates multiple existing nodes', function () {
-    $cluster = Cluster::factory()->online()->create();
-    $node1 = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $server1 = Server::factory()->create(['host' => '10.0.0.1']);
+    $node1 = MysqlNode::factory()->primary()->create([
+        'server_id' => $server1->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.1',
         'mysql_port' => 3306,
     ]);
-    $node2 = Node::factory()->secondary()->create([
+    $server2 = Server::factory()->create(['host' => '10.0.0.2']);
+    $node2 = MysqlNode::factory()->secondary()->create([
+        'server_id' => $server2->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.2',
         'mysql_port' => 3306,
     ]);
-    $newNode = Node::factory()->secondary()->create([
+    $server3 = Server::factory()->create(['host' => '10.0.0.3']);
+    $newNode = MysqlNode::factory()->secondary()->create([
+        'server_id' => $server3->id,
         'cluster_id' => $cluster->id,
-        'host' => '10.0.0.3',
     ]);
 
     $sshMock = Mockery::mock(SshService::class);
     $targetNodeIds = [];
     $sshMock->shouldReceive('exec')
-        ->andReturnUsing(function (Node $n, string $command, string $action, bool $sudo = false) use (&$targetNodeIds) {
+        ->andReturnUsing(function (MysqlNode $n, string $command, string $action, bool $sudo = false) use (&$targetNodeIds) {
             $targetNodeIds[] = $n->id;
 
             return ['success' => true, 'output' => 'ok', 'exit_code' => 0];

@@ -1,7 +1,7 @@
 <?php
 
 use App\Jobs\RefreshRouterStatusJob;
-use App\Models\Node;
+use App\Models\MysqlNode;
 use Illuminate\Bus\Batchable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -13,23 +13,23 @@ it('uses the Batchable trait', function () {
 });
 
 it('has a timeout of 30 seconds', function () {
-    $node = Node::factory()->create();
+    $node = MysqlNode::factory()->create();
     $job = new RefreshRouterStatusJob($node);
 
     expect($job->timeout)->toBe(30);
 });
 
 it('has tries set to 1', function () {
-    $node = Node::factory()->create();
+    $node = MysqlNode::factory()->create();
     $job = new RefreshRouterStatusJob($node);
 
     expect($job->tries)->toBe(1);
 });
 
 it('accepts a Node model in the constructor', function () {
-    $node = Node::factory()->create();
+    $node = MysqlNode::factory()->create();
     $job = new RefreshRouterStatusJob($node);
 
-    expect($job->node)->toBeInstanceOf(Node::class);
+    expect($job->node)->toBeInstanceOf(MysqlNode::class);
     expect($job->node->id)->toBe($node->id);
 });

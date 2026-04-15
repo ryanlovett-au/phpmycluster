@@ -2,8 +2,10 @@
 
 namespace App\Services;
 
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
+use App\Models\RedisCluster;
+use App\Models\RedisNode;
 
 class FirewallService
 {
@@ -14,7 +16,7 @@ class FirewallService
     /**
      * Check if UFW is installed and active on a node.
      */
-    public function getStatus(Node $node): array
+    public function getStatus(MysqlNode $node): array
     {
         $result = $this->ssh->exec($node, 'which ufw && ufw status verbose 2>&1', 'firewall.status', sudo: true);
 
@@ -28,7 +30,7 @@ class FirewallService
     /**
      * Install UFW if not present.
      */
-    public function installUfw(Node $node): array
+    public function installUfw(MysqlNode $node): array
     {
         return $this->ssh->exec(
             $node,
@@ -42,7 +44,7 @@ class FirewallService
      * Configure UFW rules for a DB node in the cluster.
      * Opens only the required ports from the required sources.
      */
-    public function configureDbNode(Node $node, Cluster $cluster): array
+    public function configureDbNode(MysqlNode $node, MysqlCluster $cluster): array
     {
         $results = [];
 
@@ -58,7 +60,7 @@ class FirewallService
             // MySQL protocol port
             $results[] = $this->ssh->exec(
                 $node,
-                "ufw allow from {$peer->host} to any port {$node->mysql_port} proto tcp comment 'MySQL from {$peer->name}'",
+                "ufw allow from {$peer->server->host} to any port {$node->mysql_port} proto tcp comment 'MySQL from {$peer->name}'",
                 'firewall.rule',
                 sudo: true
             );
@@ -66,7 +68,7 @@ class FirewallService
             // MySQL X protocol port
             $results[] = $this->ssh->exec(
                 $node,
-                "ufw allow from {$peer->host} to any port {$node->mysql_x_port} proto tcp comment 'MySQL X from {$peer->name}'",
+                "ufw allow from {$peer->server->host} to any port {$node->mysql_x_port} proto tcp comment 'MySQL X from {$peer->name}'",
                 'firewall.rule',
                 sudo: true
             );
@@ -74,7 +76,7 @@ class FirewallService
             // Group Replication communication port (33061)
             $results[] = $this->ssh->exec(
                 $node,
-                "ufw allow from {$peer->host} to any port 33061 proto tcp comment 'GR comm from {$peer->name}'",
+                "ufw allow from {$peer->server->host} to any port 33061 proto tcp comment 'GR comm from {$peer->name}'",
                 'firewall.rule',
                 sudo: true
             );
@@ -84,7 +86,7 @@ class FirewallService
         foreach ($cluster->accessNodes as $accessNode) {
             $results[] = $this->ssh->exec(
                 $node,
-                "ufw allow from {$accessNode->host} to any port {$node->mysql_port} proto tcp comment 'MySQL from router {$accessNode->name}'",
+                "ufw allow from {$accessNode->server->host} to any port {$node->mysql_port} proto tcp comment 'MySQL from router {$accessNode->name}'",
                 'firewall.rule',
                 sudo: true
             );
@@ -104,7 +106,7 @@ class FirewallService
      * Configure UFW rules for an access (router) node.
      * Opens MySQL Router ports for application traffic.
      */
-    public function configureAccessNode(Node $node, Cluster $cluster, string $allowFrom = '127.0.0.1'): array
+    public function configureAccessNode(MysqlNode $node, MysqlCluster $cluster, string $allowFrom = '127.0.0.1'): array
     {
         $results = [];
 
@@ -140,7 +142,7 @@ class FirewallService
      * Add a firewall rule to allow a new node IP on all existing cluster nodes.
      * Called when adding a new node to the cluster.
      */
-    public function allowNewNodeOnCluster(Cluster $cluster, Node $newNode): array
+    public function allowNewNodeOnCluster(MysqlCluster $cluster, MysqlNode $newNode): array
     {
         $results = [];
 
@@ -152,14 +154,86 @@ class FirewallService
             // Allow the new node to connect to existing nodes
             $results[] = $this->ssh->exec(
                 $existingNode,
-                "ufw allow from {$newNode->host} to any port {$existingNode->mysql_port} proto tcp comment 'MySQL from {$newNode->name}'",
+                "ufw allow from {$newNode->server->host} to any port {$existingNode->mysql_port} proto tcp comment 'MySQL from {$newNode->name}'",
                 'firewall.rule',
                 sudo: true
             );
 
             $results[] = $this->ssh->exec(
                 $existingNode,
-                "ufw allow from {$newNode->host} to any port 33061 proto tcp comment 'GR comm from {$newNode->name}'",
+                "ufw allow from {$newNode->server->host} to any port 33061 proto tcp comment 'GR comm from {$newNode->name}'",
+                'firewall.rule',
+                sudo: true
+            );
+        }
+
+        return $results;
+    }
+
+    /**
+     * Configure UFW rules for a Redis node in the cluster.
+     * Opens Redis and Sentinel ports between all cluster nodes.
+     */
+    public function configureRedisNode(RedisNode $node, RedisCluster $cluster): array
+    {
+        $results = [];
+
+        // Always allow SSH
+        $results[] = $this->ssh->exec($node, 'ufw allow 22/tcp comment "SSH"', 'firewall.rule', sudo: true);
+
+        // Allow Redis and Sentinel ports from each other node in the cluster
+        foreach ($cluster->nodes as $peer) {
+            if ($peer->id === $node->id) {
+                continue;
+            }
+
+            // Redis port
+            $results[] = $this->ssh->exec(
+                $node,
+                "ufw allow from {$peer->server->host} to any port {$node->redis_port} proto tcp comment 'Redis from {$peer->name}'",
+                'firewall.rule',
+                sudo: true
+            );
+
+            // Sentinel port
+            $results[] = $this->ssh->exec(
+                $node,
+                "ufw allow from {$peer->server->host} to any port {$node->sentinel_port} proto tcp comment 'Sentinel from {$peer->name}'",
+                'firewall.rule',
+                sudo: true
+            );
+        }
+
+        // Set defaults and enable
+        $results[] = $this->ssh->exec($node, 'ufw default deny incoming', 'firewall.rule', sudo: true);
+        $results[] = $this->ssh->exec($node, 'ufw default allow outgoing', 'firewall.rule', sudo: true);
+        $results[] = $this->ssh->exec($node, 'ufw --force enable', 'firewall.enable', sudo: true);
+
+        return $results;
+    }
+
+    /**
+     * Add a firewall rule to allow a new Redis node IP on all existing cluster nodes.
+     */
+    public function allowNewRedisNodeOnCluster(RedisCluster $cluster, RedisNode $newNode): array
+    {
+        $results = [];
+
+        foreach ($cluster->nodes as $existingNode) {
+            if ($existingNode->id === $newNode->id) {
+                continue;
+            }
+
+            $results[] = $this->ssh->exec(
+                $existingNode,
+                "ufw allow from {$newNode->server->host} to any port {$existingNode->redis_port} proto tcp comment 'Redis from {$newNode->name}'",
+                'firewall.rule',
+                sudo: true
+            );
+
+            $results[] = $this->ssh->exec(
+                $existingNode,
+                "ufw allow from {$newNode->server->host} to any port {$existingNode->sentinel_port} proto tcp comment 'Sentinel from {$newNode->name}'",
                 'firewall.rule',
                 sudo: true
             );

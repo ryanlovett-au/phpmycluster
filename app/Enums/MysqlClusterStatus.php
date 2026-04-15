@@ -2,7 +2,7 @@
 
 namespace App\Enums;
 
-enum ClusterStatus: string
+enum MysqlClusterStatus: string
 {
     case Pending = 'pending';
     case Online = 'online';

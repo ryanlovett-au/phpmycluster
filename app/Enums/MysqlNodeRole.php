@@ -2,7 +2,7 @@
 
 namespace App\Enums;
 
-enum NodeRole: string
+enum MysqlNodeRole: string
 {
     case Pending = 'pending';
     case Primary = 'primary';

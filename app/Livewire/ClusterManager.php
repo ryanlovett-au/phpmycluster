@@ -7,10 +7,11 @@ use App\Jobs\RefreshDbStatusJob;
 use App\Jobs\RefreshRouterStatusJob;
 use App\Jobs\RefreshUserListJob;
 use App\Jobs\SetupRouterJob;
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
+use App\Models\Server;
+use App\Services\MysqlProvisionService;
 use App\Services\MysqlShellService;
-use App\Services\NodeProvisionService;
 use App\Services\SshService;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
@@ -18,7 +19,7 @@ use Livewire\Component;
 
 class ClusterManager extends Component
 {
-    public Cluster $cluster;
+    public MysqlCluster $cluster;
 
     // Add DB node form
     public bool $showAddNode = false;
@@ -123,7 +124,7 @@ class ClusterManager extends Component
 
     public string $actionStatus = ''; // success, error, info
 
-    public function mount(Cluster $cluster)
+    public function mount(MysqlCluster $cluster)
     {
         $this->cluster = $cluster->load('nodes');
 
@@ -250,20 +251,25 @@ class ClusterManager extends Component
             : '';
 
         try {
-            // Determine server_id
-            $maxServerId = $this->cluster->nodes()->max('server_id') ?? 0;
+            // Determine mysql_server_id
+            $maxServerId = $this->cluster->nodes()->max('mysql_server_id') ?? 0;
 
-            $node = Node::create([
-                'cluster_id' => $this->cluster->id,
-                'name' => $this->newNodeName ?: 'node-'.($maxServerId + 1)."-{$this->newNodeHost}",
+            $server = Server::create([
+                'name' => $this->newNodeName ?: "server-{$this->newNodeHost}",
                 'host' => $this->newNodeHost,
                 'ssh_port' => $this->newNodeSshPort,
                 'ssh_user' => $this->newNodeSshUser,
                 'ssh_private_key_encrypted' => $privateKey,
                 'ssh_public_key' => $publicKey,
+            ]);
+
+            $node = MysqlNode::create([
+                'server_id' => $server->id,
+                'cluster_id' => $this->cluster->id,
+                'name' => $this->newNodeName ?: 'node-'.($maxServerId + 1)."-{$this->newNodeHost}",
                 'role' => 'pending',
                 'status' => 'unknown',
-                'server_id' => $maxServerId + 1,
+                'mysql_server_id' => $maxServerId + 1,
             ]);
 
             // Clear any previous progress for this node
@@ -317,7 +323,7 @@ class ClusterManager extends Component
      */
     public function retryAddNode(int $nodeId): void
     {
-        $node = Node::findOrFail($nodeId);
+        $node = MysqlNode::findOrFail($nodeId);
 
         // Clear any previous progress
         Cache::forget(AddNodeJob::progressKey($node->id));
@@ -341,7 +347,7 @@ class ClusterManager extends Component
      */
     public function deleteNode(int $nodeId): void
     {
-        $node = Node::findOrFail($nodeId);
+        $node = MysqlNode::findOrFail($nodeId);
 
         if ($node->role->value !== 'pending') {
             $this->setMessage('Cannot delete an active node. Remove it from the cluster first.', 'error');
@@ -397,14 +403,19 @@ class ClusterManager extends Component
             : '';
 
         try {
-            $node = Node::create([
-                'cluster_id' => $this->cluster->id,
-                'name' => $this->routerName ?: "router-{$this->routerHost}",
+            $server = Server::create([
+                'name' => $this->routerName ?: "server-{$this->routerHost}",
                 'host' => $this->routerHost,
                 'ssh_port' => $this->routerSshPort,
                 'ssh_user' => $this->routerSshUser,
                 'ssh_private_key_encrypted' => $privateKey,
                 'ssh_public_key' => $publicKey,
+            ]);
+
+            $node = MysqlNode::create([
+                'server_id' => $server->id,
+                'cluster_id' => $this->cluster->id,
+                'name' => $this->routerName ?: "router-{$this->routerHost}",
                 'role' => 'access',
                 'status' => 'unknown',
             ]);
@@ -460,7 +471,7 @@ class ClusterManager extends Component
      */
     public function retrySetupRouter(int $nodeId): void
     {
-        $node = Node::findOrFail($nodeId);
+        $node = MysqlNode::findOrFail($nodeId);
 
         Cache::forget(SetupRouterJob::progressKey($node->id));
         $node->update(['status' => 'unknown']);
@@ -491,7 +502,7 @@ class ClusterManager extends Component
      */
     public function deleteRouter(int $nodeId): void
     {
-        $node = Node::findOrFail($nodeId);
+        $node = MysqlNode::findOrFail($nodeId);
 
         if ($node->status->value === 'online') {
             $this->setMessage('Cannot delete a running router. Stop it first.', 'error');
@@ -512,8 +523,8 @@ class ClusterManager extends Component
      */
     public function checkRouterStatus(int $nodeId): void
     {
-        $node = Node::findOrFail($nodeId);
-        $result = app(NodeProvisionService::class)->getRouterStatus($node);
+        $node = MysqlNode::findOrFail($nodeId);
+        $result = app(MysqlProvisionService::class)->getRouterStatus($node);
 
         $node->update([
             'status' => $result['running'] ? 'online' : 'offline',
@@ -551,7 +562,7 @@ class ClusterManager extends Component
      */
     protected function loadFirewallRules(int $nodeId): void
     {
-        $node = Node::findOrFail($nodeId);
+        $node = MysqlNode::findOrFail($nodeId);
         $sshService = app(SshService::class);
 
         try {
@@ -593,7 +604,7 @@ class ClusterManager extends Component
             'firewallNewIp' => 'required|string',
         ]);
 
-        $node = Node::findOrFail($this->firewallRouterId);
+        $node = MysqlNode::findOrFail($this->firewallRouterId);
         $sshService = app(SshService::class);
 
         try {
@@ -627,7 +638,7 @@ class ClusterManager extends Component
             return;
         }
 
-        $node = Node::findOrFail($this->firewallRouterId);
+        $node = MysqlNode::findOrFail($this->firewallRouterId);
         $sshService = app(SshService::class);
 
         try {
@@ -656,7 +667,7 @@ class ClusterManager extends Component
      */
     public function removeNode(int $nodeId, bool $force = false)
     {
-        $node = Node::findOrFail($nodeId);
+        $node = MysqlNode::findOrFail($nodeId);
         $primary = $this->cluster->primaryNode();
 
         if (! $primary || $primary->id === $nodeId) {
@@ -683,7 +694,7 @@ class ClusterManager extends Component
      */
     public function rejoinNode(int $nodeId)
     {
-        $node = Node::findOrFail($nodeId);
+        $node = MysqlNode::findOrFail($nodeId);
         $primary = $this->cluster->primaryNode();
 
         if (! $primary) {
@@ -710,7 +721,7 @@ class ClusterManager extends Component
      */
     public function forceQuorum(int $nodeId)
     {
-        $node = Node::findOrFail($nodeId);
+        $node = MysqlNode::findOrFail($nodeId);
         $mysqlShell = app(MysqlShellService::class);
 
         $result = $mysqlShell->forceQuorum($node, $this->cluster->cluster_admin_password_encrypted);
@@ -728,7 +739,7 @@ class ClusterManager extends Component
      */
     public function rebootCluster(int $nodeId)
     {
-        $node = Node::findOrFail($nodeId);
+        $node = MysqlNode::findOrFail($nodeId);
         $mysqlShell = app(MysqlShellService::class);
 
         $result = $mysqlShell->rebootCluster($node, $this->cluster->cluster_admin_password_encrypted);
@@ -746,7 +757,7 @@ class ClusterManager extends Component
      */
     public function reprovision()
     {
-        return $this->redirect(route('cluster.reprovision', $this->cluster), navigate: true);
+        return $this->redirect(route('mysql.reprovision', $this->cluster), navigate: true);
     }
 
     /**
@@ -997,7 +1008,7 @@ class ClusterManager extends Component
      */
     public function startRename(int $nodeId): void
     {
-        $node = Node::findOrFail($nodeId);
+        $node = MysqlNode::findOrFail($nodeId);
         $this->renamingNodeId = $nodeId;
         $this->renameNodeValue = $node->name;
     }
@@ -1015,7 +1026,7 @@ class ClusterManager extends Component
             'renameNodeValue' => 'required|string|max:255',
         ]);
 
-        $node = Node::findOrFail($this->renamingNodeId);
+        $node = MysqlNode::findOrFail($this->renamingNodeId);
         $node->update(['name' => $this->renameNodeValue]);
 
         $this->renamingNodeId = null;

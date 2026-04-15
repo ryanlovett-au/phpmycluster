@@ -2,14 +2,23 @@
 
 namespace App\Models;
 
-use App\Enums\ClusterStatus;
+use App\Enums\MysqlClusterStatus;
+use Database\Factories\MysqlClusterFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Cluster extends Model
+class MysqlCluster extends Model
 {
+    /** @use HasFactory<MysqlClusterFactory> */
     use HasFactory;
+
+    protected static function newFactory(): MysqlClusterFactory
+    {
+        return MysqlClusterFactory::new();
+    }
+
+    protected $table = 'clusters';
 
     protected $fillable = [
         'name',
@@ -25,7 +34,7 @@ class Cluster extends Model
     ];
 
     protected $casts = [
-        'status' => ClusterStatus::class,
+        'status' => MysqlClusterStatus::class,
         'last_status_json' => 'array',
         'last_checked_at' => 'datetime',
         'cluster_admin_password_encrypted' => 'encrypted',
@@ -33,25 +42,25 @@ class Cluster extends Model
 
     public function nodes(): HasMany
     {
-        return $this->hasMany(Node::class);
+        return $this->hasMany(MysqlNode::class, 'cluster_id');
     }
 
     public function dbNodes(): HasMany
     {
-        return $this->hasMany(Node::class)->whereIn('role', ['primary', 'secondary', 'pending']);
+        return $this->hasMany(MysqlNode::class, 'cluster_id')->whereIn('role', ['primary', 'secondary', 'pending']);
     }
 
     public function accessNodes(): HasMany
     {
-        return $this->hasMany(Node::class)->where('role', 'access');
+        return $this->hasMany(MysqlNode::class, 'cluster_id')->where('role', 'access');
     }
 
     public function auditLogs(): HasMany
     {
-        return $this->hasMany(AuditLog::class);
+        return $this->hasMany(AuditLog::class, 'cluster_id');
     }
 
-    public function primaryNode(): ?Node
+    public function primaryNode(): ?MysqlNode
     {
         return $this->nodes()->where('role', 'primary')->first();
     }
@@ -60,7 +69,7 @@ class Cluster extends Model
      * Get a reachable DB node for status queries.
      * Tries the primary first, then falls back to online secondaries.
      */
-    public function reachableDbNode(): ?Node
+    public function reachableDbNode(): ?MysqlNode
     {
         // Try primary first
         $primary = $this->primaryNode();
@@ -85,7 +94,9 @@ class Cluster extends Model
     public function buildIpAllowlist(): string
     {
         return $this->dbNodes()
-            ->pluck('host')
+            ->with('server')
+            ->get()
+            ->pluck('server.host')
             ->unique()
             ->implode(',');
     }

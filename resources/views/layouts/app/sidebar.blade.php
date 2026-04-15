@@ -15,8 +15,27 @@
                     <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                         {{ __('Dashboard') }}
                     </flux:sidebar.item>
-                    <flux:sidebar.item icon="plus-circle" :href="route('cluster.create')" :current="request()->routeIs('cluster.create')" wire:navigate>
-                        {{ __('New Cluster') }}
+                </flux:sidebar.group>
+
+                <flux:sidebar.group :heading="__('MySQL')" class="grid">
+                    @foreach(\App\Models\MysqlCluster::orderBy('name')->get() as $mysqlCluster)
+                        <flux:sidebar.item icon="circle-stack" :href="route('mysql.manage', $mysqlCluster)" :current="request()->routeIs('mysql.manage') && request()->route('cluster')?->id === $mysqlCluster->id" wire:navigate>
+                            {{ $mysqlCluster->name }}
+                        </flux:sidebar.item>
+                    @endforeach
+                    <flux:sidebar.item icon="plus-circle" :href="route('mysql.create')" :current="request()->routeIs('mysql.create')" wire:navigate>
+                        {{ __('New MySQL Cluster') }}
+                    </flux:sidebar.item>
+                </flux:sidebar.group>
+
+                <flux:sidebar.group :heading="__('Redis')" class="grid">
+                    @foreach(\App\Models\RedisCluster::orderBy('name')->get() as $redisCluster)
+                        <flux:sidebar.item icon="server-stack" :href="route('redis.manage', $redisCluster)" :current="request()->routeIs('redis.manage') && request()->route('cluster')?->id === $redisCluster->id" wire:navigate>
+                            {{ $redisCluster->name }}
+                        </flux:sidebar.item>
+                    @endforeach
+                    <flux:sidebar.item icon="plus-circle" :href="route('redis.create')" :current="request()->routeIs('redis.create')" wire:navigate>
+                        {{ __('New Redis Cluster') }}
                     </flux:sidebar.item>
                 </flux:sidebar.group>
 
@@ -39,7 +58,10 @@
 
             <flux:sidebar.nav>
                 <flux:sidebar.item icon="book-open-text" href="https://dev.mysql.com/doc/mysql-shell/8.4/en/mysql-innodb-cluster.html" target="_blank">
-                    {{ __('InnoDB Cluster Docs') }}
+                    {{ __('MySQL Cluster Docs') }}
+                </flux:sidebar.item>
+                <flux:sidebar.item icon="book-open-text" href="https://redis.io/docs/latest/operate/oss_and_stack/management/sentinel/" target="_blank">
+                    {{ __('Redis Sentinel Docs') }}
                 </flux:sidebar.item>
             </flux:sidebar.nav>
 

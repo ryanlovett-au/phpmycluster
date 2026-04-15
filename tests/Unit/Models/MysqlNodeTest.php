@@ -1,10 +1,11 @@
 <?php
 
-use App\Enums\NodeRole;
-use App\Enums\NodeStatus;
+use App\Enums\MysqlNodeRole;
+use App\Enums\MysqlNodeStatus;
 use App\Models\AuditLog;
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
+use App\Models\Server;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -13,19 +14,19 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 uses(RefreshDatabase::class);
 
 it('uses HasFactory trait', function () {
-    expect(in_array(HasFactory::class, class_uses_recursive(Node::class)))->toBeTrue();
+    expect(in_array(HasFactory::class, class_uses_recursive(MysqlNode::class)))->toBeTrue();
 });
 
 it('belongs to a cluster', function () {
-    $node = Node::factory()->create();
+    $node = MysqlNode::factory()->create();
 
     expect($node->cluster())->toBeInstanceOf(BelongsTo::class)
-        ->and($node->cluster)->toBeInstanceOf(Cluster::class);
+        ->and($node->cluster)->toBeInstanceOf(MysqlCluster::class);
 });
 
 it('has auditLogs relationship', function () {
-    $cluster = Cluster::factory()->create();
-    $node = Node::factory()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->create();
+    $node = MysqlNode::factory()->create(['cluster_id' => $cluster->id]);
     AuditLog::factory()->count(2)->create(['cluster_id' => $cluster->id, 'node_id' => $node->id]);
 
     expect($node->auditLogs())->toBeInstanceOf(HasMany::class)
@@ -33,84 +34,86 @@ it('has auditLogs relationship', function () {
 });
 
 it('returns true from isDbNode() for primary role', function () {
-    $node = Node::factory()->primary()->make();
+    $node = MysqlNode::factory()->primary()->make();
 
     expect($node->isDbNode())->toBeTrue();
 });
 
 it('returns true from isDbNode() for secondary role', function () {
-    $node = Node::factory()->secondary()->make();
+    $node = MysqlNode::factory()->secondary()->make();
 
     expect($node->isDbNode())->toBeTrue();
 });
 
 it('returns true from isDbNode() for pending role', function () {
-    $node = Node::factory()->make(['role' => NodeRole::Pending]);
+    $node = MysqlNode::factory()->make(['role' => MysqlNodeRole::Pending]);
 
     expect($node->isDbNode())->toBeTrue();
 });
 
 it('returns false from isDbNode() for access role', function () {
-    $node = Node::factory()->access()->make();
+    $node = MysqlNode::factory()->access()->make();
 
     expect($node->isDbNode())->toBeFalse();
 });
 
 it('returns true from isAccessNode() for access role', function () {
-    $node = Node::factory()->access()->make();
+    $node = MysqlNode::factory()->access()->make();
 
     expect($node->isAccessNode())->toBeTrue();
 });
 
 it('returns false from isAccessNode() for primary role', function () {
-    $node = Node::factory()->primary()->make();
+    $node = MysqlNode::factory()->primary()->make();
 
     expect($node->isAccessNode())->toBeFalse();
 });
 
 it('returns correct mysqlsh URI with default user', function () {
-    $cluster = Cluster::factory()->make(['cluster_admin_user' => 'clusteradmin']);
-    $node = Node::factory()->make([
-        'host' => '10.0.0.1',
+    $cluster = MysqlCluster::factory()->make(['cluster_admin_user' => 'clusteradmin']);
+    $server = Server::factory()->make(['host' => '10.0.0.1']);
+    $node = MysqlNode::factory()->make([
         'mysql_port' => 3306,
     ]);
     $node->setRelation('cluster', $cluster);
+    $node->setRelation('server', $server);
 
     expect($node->getMysqlshUri())->toBe('clusteradmin@10.0.0.1:3306');
 });
 
 it('returns correct mysqlsh URI with custom user', function () {
-    $node = Node::factory()->make([
-        'host' => '10.0.0.5',
+    $server = Server::factory()->make(['host' => '10.0.0.5']);
+    $node = MysqlNode::factory()->make([
         'mysql_port' => 3307,
     ]);
+    $node->setRelation('server', $server);
 
     expect($node->getMysqlshUri('root'))->toBe('root@10.0.0.5:3307');
 });
 
-it('casts role to NodeRole enum', function () {
-    $node = Node::factory()->primary()->create();
+it('casts role to MysqlNodeRole enum', function () {
+    $node = MysqlNode::factory()->primary()->create();
 
-    expect($node->role)->toBe(NodeRole::Primary);
+    expect($node->role)->toBe(MysqlNodeRole::Primary);
 });
 
-it('casts status to NodeStatus enum', function () {
-    $node = Node::factory()->primary()->create();
+it('casts status to MysqlNodeStatus enum', function () {
+    $node = MysqlNode::factory()->primary()->create();
 
-    expect($node->status)->toBe(NodeStatus::Online);
+    expect($node->status)->toBe(MysqlNodeStatus::Online);
 });
 
-it('casts ssh_private_key_encrypted as encrypted', function () {
-    $node = Node::factory()->create(['ssh_private_key_encrypted' => 'my-private-key']);
+it('casts ssh_private_key_encrypted as encrypted on server', function () {
+    $server = Server::factory()->create(['ssh_private_key_encrypted' => 'my-private-key']);
 
-    $rawValue = DB::table('nodes')->where('id', $node->id)->value('ssh_private_key_encrypted');
+    $rawValue = DB::table('servers')->where('id', $server->id)->value('ssh_private_key_encrypted');
 
     expect($rawValue)->not->toBe('my-private-key')
-        ->and($node->ssh_private_key_encrypted)->toBe('my-private-key');
+        ->and($server->ssh_private_key_encrypted)->toBe('my-private-key');
 });
 
 it('casts mysql_root_password_encrypted as encrypted', function () {
-    $node = Node::factory()->create(['mysql_root_password_encrypted' => 'root-secret']);
+    $node = MysqlNode::factory()->create(['mysql_root_password_encrypted' => 'root-secret']);
 
     $rawValue = DB::table('nodes')->where('id', $node->id)->value('mysql_root_password_encrypted');
 
@@ -120,7 +123,7 @@ it('casts mysql_root_password_encrypted as encrypted', function () {
 
 it('casts last_health_json to array', function () {
     $health = ['status' => 'ok', 'lag' => 0];
-    $node = Node::factory()->create(['last_health_json' => $health]);
+    $node = MysqlNode::factory()->create(['last_health_json' => $health]);
 
     $node->refresh();
 
@@ -129,7 +132,7 @@ it('casts last_health_json to array', function () {
 });
 
 it('casts boolean fields correctly', function () {
-    $node = Node::factory()->primary()->create();
+    $node = MysqlNode::factory()->primary()->create();
 
     expect($node->mysql_installed)->toBeBool()
         ->and($node->mysql_shell_installed)->toBeBool()
@@ -137,18 +140,18 @@ it('casts boolean fields correctly', function () {
         ->and($node->mysql_configured)->toBeBool();
 });
 
-it('hides ssh_private_key_encrypted from serialisation', function () {
-    $node = Node::factory()->primary()->create([
+it('hides ssh_private_key_encrypted from serialisation on server', function () {
+    $server = Server::factory()->create([
         'ssh_private_key_encrypted' => 'secret-key-data',
     ]);
 
-    $array = $node->toArray();
+    $array = $server->toArray();
 
     expect($array)->not->toHaveKey('ssh_private_key_encrypted');
 });
 
 it('uses explicit fillable instead of guarded', function () {
-    $node = new Node;
+    $node = new MysqlNode;
 
     expect($node->getFillable())->not->toBeEmpty()
         ->and($node->getGuarded())->toBe(['*']);

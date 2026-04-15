@@ -144,14 +144,14 @@ it('json output includes configuration findings from env scanning', function () 
 it('suppresses known false positives', function () {
     $decoded = getJsonFindings();
 
-    // False positives for NodeProvisionService command injection should be suppressed
+    // False positives for MysqlProvisionService command injection should be suppressed
     $nodeProvisionCmdInjection = array_filter($decoded['findings'], function ($f) {
         return $f['category'] === 'Command Injection'
-            && str_contains($f['file'], 'NodeProvisionService.php')
+            && str_contains($f['file'], 'MysqlProvisionService.php')
             && str_contains($f['description'], 'Shell command built with string concatenation');
     });
 
-    expect($nodeProvisionCmdInjection)->toBeEmpty('NodeProvisionService false positives should be suppressed');
+    expect($nodeProvisionCmdInjection)->toBeEmpty('MysqlProvisionService false positives should be suppressed');
 
     // False positives for FirewallService command injection should be suppressed
     $firewallCmdInjection = array_filter($decoded['findings'], function ($f) {

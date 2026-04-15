@@ -1,8 +1,9 @@
 <?php
 
 use App\Livewire\NodeLogs;
-use App\Models\Cluster;
-use App\Models\Node;
+use App\Models\MysqlCluster;
+use App\Models\MysqlNode;
+use App\Models\Server;
 use App\Services\LogStreamService;
 use Livewire\Livewire;
 
@@ -10,11 +11,12 @@ use Livewire\Livewire;
 
 it('renders with node data', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $server = Server::factory()->create(['host' => '10.0.0.1']);
+    $node = MysqlNode::factory()->primary()->create([
+        'server_id' => $server->id,
         'cluster_id' => $cluster->id,
         'name' => 'db-primary-node',
-        'host' => '10.0.0.1',
     ]);
 
     Livewire::actingAs($user)
@@ -27,8 +29,8 @@ it('renders with node data', function () {
 
 it('renders log type selector buttons', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     Livewire::actingAs($user)
         ->test(NodeLogs::class, ['node' => $node])
@@ -41,8 +43,8 @@ it('renders log type selector buttons', function () {
 
 it('defaults to error log type', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     Livewire::actingAs($user)
         ->test(NodeLogs::class, ['node' => $node])
@@ -56,8 +58,8 @@ it('defaults to error log type', function () {
 
 it('fetches error logs from the log stream service', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $mock = Mockery::mock(LogStreamService::class);
     $mock->shouldReceive('getErrorLog')
@@ -75,8 +77,8 @@ it('fetches error logs from the log stream service', function () {
 
 it('fetches slow query logs', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $mock = Mockery::mock(LogStreamService::class);
     $mock->shouldReceive('getSlowLog')
@@ -93,8 +95,8 @@ it('fetches slow query logs', function () {
 
 it('fetches general logs', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $mock = Mockery::mock(LogStreamService::class);
     $mock->shouldReceive('getGeneralLog')
@@ -111,8 +113,8 @@ it('fetches general logs', function () {
 
 it('fetches systemd logs', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $mock = Mockery::mock(LogStreamService::class);
     $mock->shouldReceive('getSystemdLog')
@@ -129,8 +131,8 @@ it('fetches systemd logs', function () {
 
 it('fetches router logs', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->access()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->access()->create(['cluster_id' => $cluster->id]);
 
     $mock = Mockery::mock(LogStreamService::class);
     $mock->shouldReceive('getRouterLog')
@@ -147,8 +149,8 @@ it('fetches router logs', function () {
 
 it('handles error responses from log service', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $mock = Mockery::mock(LogStreamService::class);
     $mock->shouldReceive('getErrorLog')
@@ -164,8 +166,8 @@ it('handles error responses from log service', function () {
 
 it('shows "No output." when log service returns no data', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $mock = Mockery::mock(LogStreamService::class);
     $mock->shouldReceive('getErrorLog')
@@ -183,8 +185,8 @@ it('shows "No output." when log service returns no data', function () {
 
 it('changes log type and fetches new logs', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     $mock = Mockery::mock(LogStreamService::class);
     $mock->shouldReceive('getSlowLog')
@@ -203,8 +205,8 @@ it('changes log type and fetches new logs', function () {
 
 it('shows placeholder text when no logs have been fetched', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create(['cluster_id' => $cluster->id]);
 
     Livewire::actingAs($user)
         ->test(NodeLogs::class, ['node' => $node])
@@ -215,8 +217,8 @@ it('shows placeholder text when no logs have been fetched', function () {
 
 it('displays the node role', function () {
     $user = createAdmin();
-    $cluster = Cluster::factory()->online()->create();
-    $node = Node::factory()->primary()->create([
+    $cluster = MysqlCluster::factory()->online()->create();
+    $node = MysqlNode::factory()->primary()->create([
         'cluster_id' => $cluster->id,
         'name' => 'my-primary-node',
     ]);
