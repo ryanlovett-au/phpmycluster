@@ -11,7 +11,18 @@ class Cluster extends Model
 {
     use HasFactory;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'name',
+        'communication_stack',
+        'mysql_version',
+        'mysql_apt_config_version',
+        'ip_allowlist',
+        'cluster_admin_user',
+        'cluster_admin_password_encrypted',
+        'status',
+        'last_status_json',
+        'last_checked_at',
+    ];
 
     protected $casts = [
         'status' => ClusterStatus::class,

@@ -149,3 +149,10 @@ it('casts cluster_admin_password_encrypted as encrypted', function () {
     expect($rawValue)->not->toBe('my-secret-password')
         ->and($cluster->cluster_admin_password_encrypted)->toBe('my-secret-password');
 });
+
+it('uses explicit fillable instead of guarded', function () {
+    $cluster = new Cluster;
+
+    expect($cluster->getFillable())->not->toBeEmpty()
+        ->and($cluster->getGuarded())->toBe(['*']);
+});

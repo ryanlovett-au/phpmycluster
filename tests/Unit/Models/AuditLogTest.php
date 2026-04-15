@@ -32,3 +32,10 @@ it('casts duration_ms to integer', function () {
     expect($log->duration_ms)->toBeInt()
         ->and($log->duration_ms)->toBe(1234);
 });
+
+it('uses explicit fillable instead of guarded', function () {
+    $log = new AuditLog;
+
+    expect($log->getFillable())->not->toBeEmpty()
+        ->and($log->getGuarded())->toBe(['*']);
+});

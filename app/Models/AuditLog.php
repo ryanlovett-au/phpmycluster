@@ -10,7 +10,16 @@ class AuditLog extends Model
 {
     use HasFactory;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'cluster_id',
+        'node_id',
+        'action',
+        'status',
+        'command',
+        'output',
+        'error_message',
+        'duration_ms',
+    ];
 
     protected $casts = [
         'duration_ms' => 'integer',

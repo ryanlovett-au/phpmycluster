@@ -136,3 +136,20 @@ it('casts boolean fields correctly', function () {
         ->and($node->mysql_router_installed)->toBeBool()
         ->and($node->mysql_configured)->toBeBool();
 });
+
+it('hides ssh_private_key_encrypted from serialisation', function () {
+    $node = Node::factory()->primary()->create([
+        'ssh_private_key_encrypted' => 'secret-key-data',
+    ]);
+
+    $array = $node->toArray();
+
+    expect($array)->not->toHaveKey('ssh_private_key_encrypted');
+});
+
+it('uses explicit fillable instead of guarded', function () {
+    $node = new Node;
+
+    expect($node->getFillable())->not->toBeEmpty()
+        ->and($node->getGuarded())->toBe(['*']);
+});

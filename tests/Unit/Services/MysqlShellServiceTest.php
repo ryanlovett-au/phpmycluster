@@ -925,3 +925,106 @@ it('runJs handles failed ssh exec', function () {
         ->and($result['data'])->toBeNull()
         ->and($result['exit_code'])->toBe(-1);
 });
+
+// --- Input validation / sanitisation tests ---
+
+it('validateIdentifier accepts valid identifiers', function () {
+    $sshMock = Mockery::mock(SshService::class);
+    $service = new MysqlShellService($sshMock);
+
+    $method = new ReflectionMethod(MysqlShellService::class, 'validateIdentifier');
+    $method->setAccessible(true);
+
+    expect($method->invoke($service, 'app_user', 'Username'))->toBe('app_user')
+        ->and($method->invoke($service, 'my-database', 'Database'))->toBe('my-database')
+        ->and($method->invoke($service, 'user@%', 'User host'))->toBe('user@%')
+        ->and($method->invoke($service, 'db_v2.0', 'Database'))->toBe('db_v2.0');
+});
+
+it('validateIdentifier rejects identifiers with shell injection characters', function (string $badInput) {
+    $sshMock = Mockery::mock(SshService::class);
+    $service = new MysqlShellService($sshMock);
+
+    $method = new ReflectionMethod(MysqlShellService::class, 'validateIdentifier');
+    $method->setAccessible(true);
+
+    $method->invoke($service, $badInput, 'Test');
+})->with([
+    'semicolon' => ['user; DROP TABLE'],
+    'backtick' => ['user`; --'],
+    'single quote' => ["user' OR '1'='1"],
+    'double quote' => ['user" OR "1"="1'],
+    'dollar sign' => ['$(whoami)'],
+    'pipe' => ['user|cat /etc/passwd'],
+    'ampersand' => ['user && rm -rf /'],
+    'newline' => ["user\nDROP TABLE"],
+    'space' => ['user name'],
+])->throws(InvalidArgumentException::class);
+
+it('sanitisePassword escapes special characters', function () {
+    $sshMock = Mockery::mock(SshService::class);
+    $service = new MysqlShellService($sshMock);
+
+    $method = new ReflectionMethod(MysqlShellService::class, 'sanitisePassword');
+    $method->setAccessible(true);
+
+    // Single quotes, double quotes, backslashes should be escaped
+    $result = $method->invoke($service, "pass'word");
+    expect($result)->toBe("pass\\'word");
+
+    $result = $method->invoke($service, 'pass"word');
+    expect($result)->toBe('pass\\"word');
+
+    $result = $method->invoke($service, 'pass\\word');
+    expect($result)->toBe('pass\\\\word');
+});
+
+it('buildDbScope returns wildcard for star', function () {
+    $sshMock = Mockery::mock(SshService::class);
+    $service = new MysqlShellService($sshMock);
+
+    $method = new ReflectionMethod(MysqlShellService::class, 'buildDbScope');
+    $method->setAccessible(true);
+
+    expect($method->invoke($service, '*'))->toBe('*.*');
+});
+
+it('buildDbScope wraps database name in backticks', function () {
+    $sshMock = Mockery::mock(SshService::class);
+    $service = new MysqlShellService($sshMock);
+
+    $method = new ReflectionMethod(MysqlShellService::class, 'buildDbScope');
+    $method->setAccessible(true);
+
+    expect($method->invoke($service, 'mydb'))->toBe('`mydb`.*');
+});
+
+it('buildDbScope rejects invalid database names', function () {
+    $sshMock = Mockery::mock(SshService::class);
+    $service = new MysqlShellService($sshMock);
+
+    $method = new ReflectionMethod(MysqlShellService::class, 'buildDbScope');
+    $method->setAccessible(true);
+
+    $method->invoke($service, 'db; DROP TABLE users');
+})->throws(InvalidArgumentException::class);
+
+it('createUser rejects usernames with injection characters', function () {
+    $cluster = Cluster::factory()->online()->create();
+    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+
+    $sshMock = Mockery::mock(SshService::class);
+    $service = new MysqlShellService($sshMock);
+
+    $service->createUser($node, 'adminpass', "evil'; DROP TABLE users; --", 'userpass', '%', '*', 'ALL PRIVILEGES');
+})->throws(InvalidArgumentException::class);
+
+it('dropUser rejects usernames with injection characters', function () {
+    $cluster = Cluster::factory()->online()->create();
+    $node = Node::factory()->primary()->create(['cluster_id' => $cluster->id]);
+
+    $sshMock = Mockery::mock(SshService::class);
+    $service = new MysqlShellService($sshMock);
+
+    $service->dropUser($node, 'adminpass', "evil'; DROP TABLE users; --", '%');
+})->throws(InvalidArgumentException::class);

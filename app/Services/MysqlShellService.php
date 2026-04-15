@@ -339,15 +339,55 @@ try {
     }
 
     /**
+     * Validate and sanitise a MySQL identifier (username, database, host).
+     * Only allows safe characters to prevent SQL/shell injection.
+     *
+     * @throws \InvalidArgumentException if the identifier contains unsafe characters
+     */
+    protected function validateIdentifier(string $value, string $label): string
+    {
+        // Allow alphanumeric, underscore, hyphen, dot, percent (for host wildcards), at sign
+        if (! preg_match('/^[a-zA-Z0-9_.\-%@\/]+$/', $value)) {
+            throw new \InvalidArgumentException("{$label} contains invalid characters: {$value}");
+        }
+
+        return addslashes($value);
+    }
+
+    /**
+     * Sanitise a password for use inside a MySQL Shell JS string.
+     * Escapes quotes and backslashes for both JS and SQL contexts.
+     */
+    protected function sanitisePassword(string $password): string
+    {
+        // Escape backslash first, then single and double quotes for JS+SQL nesting
+        return addslashes($password);
+    }
+
+    /**
+     * Build a safe database scope string for GRANT/REVOKE statements.
+     */
+    protected function buildDbScope(string $database): string
+    {
+        if ($database === '*') {
+            return '*.*';
+        }
+
+        $escaped = $this->validateIdentifier($database, 'Database name');
+
+        return '`'.$escaped.'`.*';
+    }
+
+    /**
      * Create a MySQL user with specified privileges.
      * Connects as root via Unix socket for full DDL/GRANT privileges.
      */
     public function createUser(Node $node, string $password, string $user, string $userPassword, string $host, string $database, string $privileges): array
     {
-        $escapedUser = addslashes($user);
-        $escapedHost = addslashes($host);
-        $escapedPass = addslashes($userPassword);
-        $dbScope = $database === '*' ? '*.*' : '`'.addslashes($database).'`.*';
+        $escapedUser = $this->validateIdentifier($user, 'Username');
+        $escapedHost = $this->validateIdentifier($host, 'Host');
+        $escapedPass = $this->sanitisePassword($userPassword);
+        $dbScope = $this->buildDbScope($database);
         $socketUri = 'root@localhost?socket=%2Fvar%2Frun%2Fmysqld%2Fmysqld.sock';
 
         return $this->runJs($node, "
@@ -368,19 +408,19 @@ try {
      */
     public function updateUser(Node $node, string $password, string $user, string $host, ?string $newPassword, ?string $database, ?string $privileges): array
     {
-        $escapedUser = addslashes($user);
-        $escapedHost = addslashes($host);
+        $escapedUser = $this->validateIdentifier($user, 'Username');
+        $escapedHost = $this->validateIdentifier($host, 'Host');
         $socketUri = 'root@localhost?socket=%2Fvar%2Frun%2Fmysqld%2Fmysqld.sock';
 
         $statements = '';
 
         if ($newPassword !== null && $newPassword !== '') {
-            $escapedPass = addslashes($newPassword);
+            $escapedPass = $this->sanitisePassword($newPassword);
             $statements .= "session.runSql(\"ALTER USER '{$escapedUser}'@'{$escapedHost}' IDENTIFIED BY '{$escapedPass}'\");";
         }
 
         if ($database !== null && $privileges !== null) {
-            $dbScope = $database === '*' ? '*.*' : '`'.addslashes($database).'`.*';
+            $dbScope = $this->buildDbScope($database);
             $statements .= "session.runSql(\"REVOKE ALL PRIVILEGES, GRANT OPTION FROM '{$escapedUser}'@'{$escapedHost}'\");";
             $statements .= "session.runSql(\"GRANT {$privileges} ON {$dbScope} TO '{$escapedUser}'@'{$escapedHost}'\");";
         }
@@ -403,8 +443,8 @@ try {
      */
     public function dropUser(Node $node, string $password, string $user, string $host): array
     {
-        $escapedUser = addslashes($user);
-        $escapedHost = addslashes($host);
+        $escapedUser = $this->validateIdentifier($user, 'Username');
+        $escapedHost = $this->validateIdentifier($host, 'Host');
         $socketUri = 'root@localhost?socket=%2Fvar%2Frun%2Fmysqld%2Fmysqld.sock';
 
         return $this->runJs($node, "
@@ -448,7 +488,7 @@ try {
      */
     public function createDatabase(Node $node, string $password, string $database): array
     {
-        $escapedDb = addslashes($database);
+        $escapedDb = $this->validateIdentifier($database, 'Database name');
         $socketUri = 'root@localhost?socket=%2Fvar%2Frun%2Fmysqld%2Fmysqld.sock';
 
         return $this->runJs($node, "

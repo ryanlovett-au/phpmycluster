@@ -13,7 +13,36 @@ class Node extends Model
 {
     use HasFactory;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'cluster_id',
+        'name',
+        'host',
+        'ssh_port',
+        'ssh_user',
+        'ssh_private_key_encrypted',
+        'ssh_public_key',
+        'ssh_key_fingerprint',
+        'mysql_port',
+        'mysql_x_port',
+        'mysql_root_password_encrypted',
+        'role',
+        'status',
+        'server_id',
+        'mysql_installed',
+        'mysql_shell_installed',
+        'mysql_router_installed',
+        'mysql_configured',
+        'mysql_version',
+        'last_health_json',
+        'last_checked_at',
+        'ram_mb',
+        'cpu_cores',
+        'os_name',
+    ];
+
+    protected $hidden = [
+        'ssh_private_key_encrypted',
+    ];
 
     protected $casts = [
         'role' => NodeRole::class,
