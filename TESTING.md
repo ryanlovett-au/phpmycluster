@@ -37,10 +37,11 @@ tests/
 ├── Unit/
 │   ├── Enums/                        # Enum label/value tests
 │   ├── Jobs/                         # Job dispatch, handle, and trait tests
-│   ├── Models/                       # Model relationships, casts, scopes
+│   ├── Models/                       # Relationships, casts, fillable, hidden
 │   ├── Providers/                    # Service provider registration
 │   ├── Security/                     # AuditReport tool tests
 │   └── Services/                     # Service classes with mocked SSH
+│       └── MysqlShellServiceTest.php # Includes input validation/injection tests
 └── Feature/
     ├── Auth/                         # First user auto-approval
     ├── Middleware/                    # EnsureUserIsApproved middleware
@@ -72,9 +73,11 @@ Since PHPMyCluster manages remote servers via SSH, all service tests use **Mocke
 - **SshService** — SSH2/SFTP mocked via `Mockery::mock(SSH2::class)`
 - **MysqlShellService** — SshService injected and mocked
 - **FirewallService** — SshService injected and mocked
-- **NodeProvisionService** — SshService and Http facade mocked
+- **NodeProvisionService** — SshService and Http facade mocked (includes auto-tuning detection)
 - **Jobs** — All services mocked via constructor injection
 - **Livewire components** — Services mocked via `$this->mock(Service::class)`
+- **Input Validation** — `validateIdentifier()` tested with 9 injection vectors (semicolons, backticks, quotes, `$(...)`, pipes, etc.)
+- **Model Security** — `$fillable` and `$hidden` attributes verified on all models
 
 ## Model Factories
 

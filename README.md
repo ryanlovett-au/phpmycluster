@@ -1,8 +1,29 @@
-# PHPMyCluster
+<p align="center">
+  <img src="public/favicon.svg" alt="PHPMyCluster" width="80" height="80">
+</p>
 
-A web-based management tool for MySQL InnoDB Clusters. Deploy, monitor, and manage highly available MySQL clusters from a single control panel — all over SSH.
+<h1 align="center">PHPMyCluster</h1>
+
+<p align="center">
+  A web-based management tool for MySQL InnoDB Clusters.<br>
+  Deploy, monitor, and manage highly available MySQL clusters from a single control panel — all over SSH.
+</p>
 
 Built with Laravel 13, Livewire 3, Flux UI, and Tailwind CSS.
+
+## Screenshots
+
+**Cluster Overview** — Real-time node health, replication status, and transaction sync at a glance.
+
+![Cluster Overview](screenshots/cluster.png)
+
+**Add New Node** — Add a DB node by entering its SSH details. PHPMyCluster generates a key pair and provides the command to authorise it on the server.
+
+![Add New Node](screenshots/newnode.png)
+
+**Routers, Users & Recovery** — Manage MySQL Routers, database users, and run recovery actions like force quorum and reboot from outage.
+
+![Routers, Users & Recovery](screenshots/recovery.png)
 
 ## Features
 
@@ -13,6 +34,7 @@ Built with Laravel 13, Livewire 3, Flux UI, and Tailwind CSS.
 - **Firewall Management** — Automatic UFW configuration with dynamic IP allowlists. Ports are opened only between cluster nodes.
 - **Log Streaming** — Stream error logs, slow query logs, general logs, and systemd journals from any node in real time.
 - **MySQL User Management** — Create, edit, and drop MySQL users with privilege presets. Create databases directly from the UI.
+- **MySQL Auto-Tuning** — Detects server hardware (RAM, CPU cores, OS) during provisioning and generates an optimised `my.cnf` — buffer pool, redo log, connections, parallelism, and more are all scaled to the node's resources.
 - **Async Operations** — Long-running tasks (provisioning, status refresh) run as queued jobs with real-time progress tracking.
 
 ## Requirements

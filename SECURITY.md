@@ -29,6 +29,17 @@ Any process with access to both the database and the `APP_KEY` can decrypt the S
 
 **This is by design** — the control plane must hold credentials to function. The important thing is to protect the control node itself.
 
+## Security Hardening
+
+PHPMyCluster applies the following security measures:
+
+- **Input Validation** — All user-supplied identifiers (usernames, hostnames, database names) passed to MySQL Shell JS commands are validated against a strict allowlist (`[a-zA-Z0-9_.\-%@/]`). Invalid characters throw an `InvalidArgumentException` before any command is executed, preventing shell and SQL injection.
+- **Password Sanitisation** — Passwords embedded in MySQL Shell commands are escaped with `addslashes()` to handle quotes and backslashes safely within the JS/SQL nesting.
+- **Mass Assignment Protection** — All Eloquent models use explicit `$fillable` arrays rather than `$guarded = []`, preventing unintended attribute assignment.
+- **Sensitive Data Hidden** — The `ssh_private_key_encrypted` attribute is listed in the Node model's `$hidden` array, preventing accidental exposure in JSON responses or logs.
+- **Rate Limiting** — Web routes are throttled to 120 requests per minute per IP. Authentication routes (login, two-factor) have stricter dedicated rate limiters (5 per minute).
+- **Encrypted Storage** — SSH private keys, MySQL root passwords, and cluster admin passwords are stored with Laravel's `encrypted` cast (AES-256-CBC), requiring the `APP_KEY` to decrypt.
+
 ## Security Best Practices
 
 When deploying PHPMyCluster, please ensure:
