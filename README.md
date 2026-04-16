@@ -67,32 +67,37 @@ Built with Laravel 13, Livewire 4, Flux UI, and Tailwind CSS.
 ## Requirements
 
 - PHP 8.3+
-- Composer
-- Node.js 18+ and npm
+- Composer 2.x
+- Node.js 20+ and npm
 - SQLite (used as the local application database)
 - SSH access to your target servers (Debian/Ubuntu)
 
 ## Installation
 
-### 1. Clone the repository
-
 ```bash
-git clone https://github.com/your-org/phpmycluster.git
+# Clone the repo
+git clone https://github.com/ryanlovett-au/phpmycluster.git
 cd phpmycluster
-```
 
-### 2. Install dependencies
-
-```bash
+# Install PHP dependencies
 composer install
+
+# Install JS dependencies
 npm install
-```
 
-### 3. Configure environment
-
-```bash
+# Copy env and generate app key
 cp .env.example .env
 php artisan key:generate
+
+# Create the SQLite database and run migrations
+touch database/database.sqlite
+php artisan migrate
+
+# Build frontend assets
+npm run build
+
+# Start the dev server (serves Laravel + queue worker + Vite)
+composer run dev
 ```
 
 The default configuration uses SQLite, which requires no additional database setup. The `.env` defaults are:
@@ -103,20 +108,6 @@ QUEUE_CONNECTION=database
 CACHE_STORE=database
 SESSION_DRIVER=database
 ```
-
-### 4. Run migrations
-
-```bash
-php artisan migrate
-```
-
-### 5. Build frontend assets
-
-```bash
-npm run build
-```
-
-### 6. Create your admin user
 
 Visit the application in your browser and register. The first registered user is automatically approved and granted admin privileges. Subsequent users require approval from the Users page.
 
